@@ -1,0 +1,712 @@
+import { useState, useEffect, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Bot, Scan, Download, ExternalLink, AlertTriangle, CheckCircle, Clock, Zap, Globe, FileText, FlaskConical } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useDevMode } from "@/contexts/DevModeContext";
+import { getWebSocketUrl } from "@/lib/api-config";
+import { formAPI } from "@/services/api";
+import { PDFGenerator } from "@/lib/pdf-generator";
+import { getNormalizedResults } from "@/lib/scan-results";
+import type { ScanResults } from "@/lib/scan-types";
+import { PerformanceDashboard } from "@/components/PerformanceDashboard";
+import FormAnalysisDisplay from "@/components/FormAnalysisDisplay";
+
+interface ScanJob {
+  id: string;
+  url: string;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'completed_with_errors';
+  progress: number;
+  currentStep: string;
+  results?: ScanResults;
+  error?: string;
+  createdAt: string;
+  // Per-form analysis fields
+  formsFound?: number;
+  formsAnalyzed?: number;
+  // True when the backend served this job from the bundled mock fixtures.
+  // Read off the job record rather than the live toggle, so a result stays
+  // labelled correctly even if Dev Mode is flipped afterwards.
+  devMode?: boolean;
+}
+
+interface PerFormProgress {
+  formsFound: number;
+  formsAnalyzed: number;
+  currentFormIndex?: number;
+}
+
+/**
+ * Builds the client-side id for a scan whose results came back immediately,
+ * so the completed job has a stable key even though the backend never issued
+ * a job id for it. Lives at module scope because reading the clock is impure:
+ * inside the component body React's lint rules (correctly) treat it as render
+ * work that could produce a different value on every re-render.
+ */
+const createImmediateScanId = () => `scan-${Date.now()}`;
+
+export const AIScanner = () => {
+  const [url, setUrl] = useState("");
+  const [fullCrawl, setFullCrawl] = useState(false); // Default OFF as requested
+  const [currentJob, setCurrentJob] = useState<ScanJob | null>(null);
+  // The live socket is an external resource, not render input: nothing in the
+  // JSX reads it, only `resetScan` needs a handle to close it. A ref keeps it
+  // out of the render cycle, which is also what React's set-state-in-effect
+  // rule asks for.
+  const wsRef = useRef<WebSocket | null>(null);
+  const [perFormProgress, setPerFormProgress] = useState<PerFormProgress>({
+    formsFound: 0,
+    formsAnalyzed: 0
+  });
+  const { toast } = useToast();
+  const { isDevMode } = useDevMode();
+
+  // WebSocket connection for real-time updates
+  useEffect(() => {
+    if (currentJob && currentJob.status === 'running') {
+      const wsUrl = getWebSocketUrl();
+      const websocket = new WebSocket(wsUrl);
+      
+      websocket.onopen = () => {
+        console.log('WebSocket connected');
+        websocket.send(JSON.stringify({
+          type: 'subscribe',
+          jobId: currentJob.id
+        }));
+      };
+      
+      websocket.onmessage = (event) => {
+        try {
+          const update = JSON.parse(event.data);
+          if (update.jobId === currentJob.id) {
+            // Handle per-form progress updates
+            if (update.type === 'forms_discovered') {
+              setPerFormProgress(prev => ({
+                ...prev,
+                formsFound: update.formsCount || 0
+              }));
+              
+              toast({
+                title: "Forms Discovered",
+                description: `Found ${update.formsCount} forms on the page. Starting individual analysis...`,
+              });
+            }
+            
+            if (update.type === 'form_analyzed') {
+              setPerFormProgress(prev => ({
+                ...prev,
+                formsAnalyzed: prev.formsAnalyzed + 1,
+                currentFormIndex: update.formData?.formIndex
+              }));
+              
+              toast({
+                title: "Form Analyzed",
+                description: `Completed analysis of form ${update.formData?.formIndex} of ${update.formData?.totalForms}`,
+              });
+            }
+            
+            // Regular progress update
+            setCurrentJob(prev => prev ? { 
+              ...prev, 
+              ...update,
+              formsFound: update.formsFound || prev.formsFound || 0,
+              formsAnalyzed: update.formsAnalyzed || prev.formsAnalyzed || 0
+            } : null);
+          }
+        } catch (error) {
+          console.error('WebSocket message error:', error);
+        }
+      };
+      
+      websocket.onclose = () => {
+        console.log('WebSocket disconnected');
+      };
+      
+      wsRef.current = websocket;
+      
+      return () => {
+        websocket.close();
+      };
+    }
+  }, [currentJob?.id, currentJob?.status]);
+
+  const validateUrl = (url: string): boolean => {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleFullCrawlToggle = (checked: boolean) => {
+    setFullCrawl(checked);
+  };
+
+  const startAIScan = async () => {
+    if (!url) {
+      toast({
+        title: "Please enter a URL",
+        description: "Enter a website URL to start the AI-driven scan",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!validateUrl(url)) {
+      toast({
+        title: "Invalid URL",
+        description: "Please enter a valid website URL (e.g., https://example.com)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const scanResults = await formAPI.startScan({
+        url,
+        fullCrawl, // Pass the crawling mode to the backend
+        devMode: isDevMode // Pass dev mode state to backend
+      });
+      
+      // Check if this is immediate results (our current backend) or job-based response
+      if (scanResults.success && scanResults.scanType) {
+        // Immediate results - create a completed job structure
+        setCurrentJob({
+          id: createImmediateScanId(),
+          url,
+          status: 'completed',
+          progress: 100,
+          currentStep: 'Scan completed',
+          createdAt: new Date().toISOString(),
+          results: scanResults,
+          devMode: scanResults.devMode === true
+        });
+
+        toast({
+          title: "AI Scan Complete",
+          description: `Analyzed ${scanResults.summary.totalPages} page${scanResults.summary.totalPages !== 1 ? 's' : ''} and found ${scanResults.summary.totalForms} form${scanResults.summary.totalForms !== 1 ? 's' : ''}`,
+        });
+      } else if (scanResults.jobId) {
+        // Job-based response - use polling
+        setCurrentJob({
+          id: scanResults.jobId,
+          url,
+          status: 'queued',
+          progress: 0,
+          currentStep: 'Queued for processing...',
+          createdAt: new Date().toISOString(),
+          devMode: scanResults.devMode === true
+        });
+
+        toast({
+          title: "AI Scan Started",
+          description: fullCrawl 
+            ? "The AI agent is now crawling and analyzing your entire website"
+            : "The AI agent is now analyzing the provided URL",
+        });
+
+        // Start polling for updates
+        pollJobStatus(scanResults.jobId);
+      } else {
+        throw new Error('Invalid response format');
+      }
+
+    } catch (error: unknown) {
+      console.error('Scan start error:', error);
+
+      toast({
+        title: "Scan Failed",
+        description: error instanceof Error ? error.message : "Failed to start scan",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const pollJobStatus = async (jobId: string) => {
+    try {
+      const job = await formAPI.getReport(jobId);
+      setCurrentJob(job);
+
+      if (job.status === 'running' || job.status === 'queued') {
+        setTimeout(() => pollJobStatus(jobId), 2000);
+      }
+    } catch (error) {
+      console.error('Polling error:', error);
+    }
+  };
+
+  const downloadReport = () => {
+    if (currentJob?.results) {
+      try {
+        const pdfGenerator = new PDFGenerator();
+        pdfGenerator.generateReport(getNormalizedResults(currentJob), currentJob.id);
+        
+        const timestamp = new Date().toISOString().split('T')[0];
+        const filename = `muse-form-audit-${timestamp}-${currentJob.id.substring(0, 8)}.pdf`;
+        
+        pdfGenerator.download(filename);
+        
+        toast({
+          title: "PDF Report Downloaded",
+          description: "Your Muse Form Audit report has been saved as a PDF",
+        });
+      } catch (error) {
+        console.error('PDF generation failed:', error);
+        toast({
+          title: "Download Failed",
+          description: "Unable to generate PDF report. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  const resetScan = () => {
+    setCurrentJob(null);
+    setUrl("");
+    setFullCrawl(false); // Reset to default OFF state
+    setPerFormProgress({
+      formsFound: 0,
+      formsAnalyzed: 0
+    });
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'queued':
+        return <Clock className="h-5 w-5 text-yellow-500" />;
+      case 'running':
+        return <Zap className="h-5 w-5 text-blue-500 animate-pulse" />;
+      case 'completed':
+        return <CheckCircle className="h-5 w-5 text-green-500" />;
+      case 'failed':
+        return <AlertTriangle className="h-5 w-5 text-red-500" />;
+      default:
+        return <Bot className="h-5 w-5" />;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'queued':
+        return 'bg-yellow-500/20 text-yellow-700 border-yellow-500/30';
+      case 'running':
+        return 'bg-blue-500/20 text-blue-700 border-blue-500/30';
+      case 'completed':
+        return 'bg-green-500/20 text-green-700 border-green-500/30';
+      case 'failed':
+        return 'bg-red-500/20 text-red-700 border-red-500/30';
+      default:
+        return 'bg-gray-500/20 text-gray-700 border-gray-500/30';
+    }
+  };
+
+  return (
+    <div className="min-h-screen relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-hero" />
+      
+      <div className="relative z-10 container mx-auto px-4 py-20">
+        <div className="max-w-4xl mx-auto text-center">          
+          
+          <p className="text-xl md:text-2xl text-muted-foreground mb-12 max-w-3xl mx-auto leading-relaxed">
+            Advanced AI-driven website analyzer that scans web pages to analyze all forms and provide comprehensive accessibility reports for AI agents.
+          </p>
+
+          {/* Scan Input */}
+          {!currentJob && (
+            <Card className="bg-card/50 backdrop-blur-sm border-border/50 shadow-glow mb-12 max-w-2xl mx-auto">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="h-5 w-5" />
+                  AI-Powered Deep Scan
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  {/* URL Input */}
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <div className="flex-1 relative">
+                      <Input
+                        type="url"
+                        placeholder="https://example.com"
+                        value={url}
+                        onChange={(e) => setUrl(e.target.value)}
+                        className="h-14 text-lg bg-input/50 border-border/50 focus:border-primary"
+                        // AI Agent friendly attributes
+                        data-ai-role="website-url-input"
+                        data-ai-description="Enter website URL to analyze forms for AI agent compatibility"
+                        data-ai-expected-format="https://example.com"
+                        data-ai-validation="url"
+                        aria-label="Website URL for AI form analysis"
+                        aria-describedby="url-input-description"
+                        id="muse-form-audit-url-input"
+                        name="website-url"
+                        autoComplete="url"
+                      />
+                      <div id="url-input-description" className="sr-only">
+                        Enter the complete URL of the website you want to analyze for AI agent form compatibility. Include https:// at the beginning.
+                      </div>
+                    </div>
+                    
+                    {/* Analysis Button */}
+                    <div className="flex justify-center">
+                      <Button
+                        onClick={startAIScan}
+                        variant="scan"
+                        size="xl"
+                        className="min-w-[160px]"
+                        // AI Agent friendly attributes
+                        data-ai-role="form-analysis-trigger"
+                        data-ai-action="analyze-website-forms"
+                        data-ai-description="Start AI-powered analysis of website forms for compatibility and accessibility"
+                        aria-label="Start AI form analysis"
+                        id="muse-form-audit-scan-button"
+                        type="button"
+                      >
+                        <Scan className="h-5 w-5" />
+                        Full AI Scan
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Full Website Crawl Toggle */}
+                  <div className="relative p-4 rounded-lg border transition-all duration-200 bg-muted/30 border-border/30">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4 flex-1">
+                          <div className={`p-2 rounded-lg ${
+                            fullCrawl
+                              ? 'bg-violet-500/20 text-violet-400' 
+                              : 'bg-slate-700/50 text-slate-400'
+                          }`}>
+                            {fullCrawl ? (
+                              <Globe className="h-5 w-5" />
+                            ) : (
+                              <FileText className="h-5 w-5" />
+                            )}
+                          </div>
+                          
+                          <div className="flex-1">
+                            <h3 className="text-base font-semibold text-white mb-1">
+                              Scan entire website
+                            </h3>
+                            
+                            <p className="text-sm text-slate-400">
+                              {fullCrawl
+                                ? "Crawl and analyze all discoverable pages across the entire website"
+                                : "Analyze only the provided URL"
+                              }
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <Switch
+                          id="full-crawl"
+                          checked={fullCrawl}
+                          onCheckedChange={handleFullCrawlToggle}
+                          className="data-[state=checked]:bg-violet-600 data-[state=unchecked]:bg-slate-600 data-[state=unchecked]:border-slate-500 border-2"
+                        />
+                      </div>
+                    </div>
+
+                  {/* Description based on mode */}
+                  <div className="text-sm space-y-3">
+                    <p className="text-slate-300 font-medium">🤖 AI agent will {fullCrawl ? "autonomously" : "systematically"}:</p>
+                    <div className="space-y-2">
+                      {fullCrawl ? (
+                        <>
+                          <div className="flex items-start gap-3 text-slate-400">
+                            <div className="w-1 h-1 bg-violet-500 rounded-full mt-2 flex-shrink-0"></div>
+                            <span>Fetch sitemap.xml and discover all pages</span>
+                          </div>
+                          <div className="flex items-start gap-3 text-slate-400">
+                            <div className="w-1 h-1 bg-violet-500 rounded-full mt-2 flex-shrink-0"></div>
+                            <span>Visit every discoverable page on the domain</span>
+                          </div>
+                          <div className="flex items-start gap-3 text-slate-400">
+                            <div className="w-1 h-1 bg-violet-500 rounded-full mt-2 flex-shrink-0"></div>
+                            <span>Extract and analyze all forms for AI agent compatibility</span>
+                          </div>
+                          <div className="flex items-start gap-3 text-slate-400">
+                            <div className="w-1 h-1 bg-violet-500 rounded-full mt-2 flex-shrink-0"></div>
+                            <span>Test form filling and validation</span>
+                          </div>
+                          <div className="flex items-start gap-3 text-slate-400">
+                            <div className="w-1 h-1 bg-violet-500 rounded-full mt-2 flex-shrink-0"></div>
+                            <span>Generate comprehensive AI-friendly analysis report</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-start gap-3 text-slate-400">
+                            <div className="w-1 h-1 bg-slate-500 rounded-full mt-2 flex-shrink-0"></div>
+                            <span>Analyze the provided URL only</span>
+                          </div>
+                          <div className="flex items-start gap-3 text-slate-400">
+                            <div className="w-1 h-1 bg-slate-500 rounded-full mt-2 flex-shrink-0"></div>
+                            <span>Extract and analyze all forms on that page</span>
+                          </div>
+                          <div className="flex items-start gap-3 text-slate-400">
+                            <div className="w-1 h-1 bg-slate-500 rounded-full mt-2 flex-shrink-0"></div>
+                            <span>Test form accessibility and AI compatibility</span>
+                          </div>
+                          <div className="flex items-start gap-3 text-slate-400">
+                            <div className="w-1 h-1 bg-slate-500 rounded-full mt-2 flex-shrink-0"></div>
+                            <span>Generate focused page analysis report</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Scan Progress */}
+          {currentJob && (
+            <Card className="bg-card/50 backdrop-blur-sm border-border/50 shadow-glow mb-12 max-w-4xl mx-auto">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {getStatusIcon(currentJob.status)}
+                    AI Scan Progress
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {currentJob.devMode && (
+                      <Badge variant="secondary" className="text-xs">
+                        <FlaskConical className="h-3 w-3 mr-1" />
+                        Mock Data
+                      </Badge>
+                    )}
+                    <Badge className={getStatusColor(currentJob.status)}>
+                      {currentJob.status.toUpperCase()}
+                    </Badge>
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Mock-run marker, driven by the job record rather than the toggle */}
+                {currentJob.devMode && (
+                  <Alert className="bg-muted/30 border-border/50 text-left">
+                    <FlaskConical className="h-4 w-4" />
+                    <AlertTitle>Mock Data &mdash; sample output, not a real scan</AlertTitle>
+                    <AlertDescription className="text-muted-foreground">
+                      These results come from the bundled sample fixtures. Switch the header
+                      toggle to Production and add API keys to run a real audit.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Progress Bar */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>{currentJob.currentStep}</span>
+                    <span>{currentJob.progress}%</span>
+                  </div>
+                  <Progress value={currentJob.progress} className="h-3" />
+                </div>
+
+                {/* Per-Form Analysis Progress */}
+                {(perFormProgress.formsFound > 0 || (currentJob.formsFound || 0) > 0) && (
+                  <div className="bg-muted/30 backdrop-blur-sm p-4 rounded-lg border border-border/30">
+                    <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Per-Form Analysis Progress
+                    </h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-3">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-500">
+                          {currentJob.formsFound || perFormProgress.formsFound}
+                        </div>
+                        <div className="text-muted-foreground">Forms Found</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-green-500">
+                          {currentJob.formsAnalyzed || perFormProgress.formsAnalyzed}
+                        </div>
+                        <div className="text-muted-foreground">Forms Analyzed</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-orange-500">
+                          {Math.max(0, (currentJob.formsFound || perFormProgress.formsFound) - (currentJob.formsAnalyzed || perFormProgress.formsAnalyzed))}
+                        </div>
+                        <div className="text-muted-foreground">Remaining</div>
+                      </div>
+                    </div>
+                    
+                    {/* Per-form progress bar */}
+                    {(currentJob.formsFound || perFormProgress.formsFound) > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span>Form Analysis Progress</span>
+                          <span>
+                            {currentJob.formsAnalyzed || perFormProgress.formsAnalyzed} / {currentJob.formsFound || perFormProgress.formsFound}
+                          </span>
+                        </div>
+                        <Progress 
+                          value={((currentJob.formsAnalyzed || perFormProgress.formsAnalyzed) / (currentJob.formsFound || perFormProgress.formsFound)) * 100} 
+                          className="h-2" 
+                        />
+                      </div>
+                    )}
+                    
+                  </div>
+                )}
+
+                {/* Scan Details */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Target URL:</span>
+                    <div className="font-medium truncate">{currentJob.url}</div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Job ID:</span>
+                    <div className="font-mono text-xs">{currentJob.id}</div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Started:</span>
+                    <div className="font-medium">
+                      {new Date(currentJob.createdAt).toLocaleTimeString()}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Error Display */}
+                {currentJob.error && (
+                  <div className="bg-red-500/20 backdrop-blur-sm p-4 rounded-lg border border-red-500/30 text-left">
+                    <h4 className="font-semibold text-red-600 mb-2">Error Occurred</h4>
+                    <p className="text-red-500 text-sm">{currentJob.error}</p>
+                    {!currentJob.devMode && (
+                      <p className="text-muted-foreground text-xs mt-3">
+                        No API keys yet? Switch the header toggle to Dev Mode to walk the
+                        entire flow on sample data &mdash; no keys required.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 justify-center">
+                  {(currentJob.status === 'completed' || currentJob.status === 'completed_with_errors') && currentJob.results && (
+                    <Button onClick={downloadReport} variant="outline">
+                      <Download className="h-4 w-4 mr-2" />
+                      Download PDF Report
+                    </Button>
+                  )}
+                  <Button onClick={resetScan} variant="outline">
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    New Scan
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Results Summary */}
+          {currentJob?.results && (
+            <Card className="bg-card/50 backdrop-blur-sm border-border/50 shadow-glow mb-12 max-w-6xl mx-auto">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CheckCircle className="h-6 w-6 text-green-500" />
+                  Comprehensive Scan Results
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {/* Mock-run marker, so sample results are never read as a real audit */}
+                {currentJob.devMode && (
+                  <Alert className="mb-6 bg-muted/30 border-border/50 text-left">
+                    <FlaskConical className="h-4 w-4" />
+                    <AlertTitle>Mock Data &mdash; sample output, not a real scan</AlertTitle>
+                    <AlertDescription className="text-muted-foreground">
+                      Every score, form and URL below comes from the bundled sample fixtures.
+                      The downloaded PDF is marked as mock output too.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Performance Dashboard */}
+                <div className="mb-6">
+                  <PerformanceDashboard results={currentJob.results} />
+                </div>
+
+                {/* Comprehensive Form Analysis Display */}
+                <FormAnalysisDisplay 
+                  forms={currentJob.results.forms || []}
+                  summary={currentJob.results.summary}
+                  aiSummary={getNormalizedResults(currentJob).aiSummary}
+                  scanMode={getNormalizedResults(currentJob).scanMode}
+                />
+
+                {/* Scan Metadata */}
+                {currentJob.results.scanMetadata && (
+                  <div className="mt-6 pt-4 border-t border-border/50">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs text-muted-foreground">
+                      <div>
+                        <span className="font-medium">Duration:</span> {
+                          currentJob.results.scanMetadata.scanDuration ? 
+                          Math.round(currentJob.results.scanMetadata.scanDuration / 1000) + 's' : 
+                          'N/A'
+                        }
+                      </div>
+                      <div>
+                        <span className="font-medium">Iterations:</span> {currentJob.results.scanMetadata.iterations || 'N/A'}
+                      </div>
+                      <div>
+                        <span className="font-medium">Messages:</span> {currentJob.results.scanMetadata.totalMessages || 'N/A'}
+                      </div>
+                      <div>
+                        <span className="font-medium">Completed:</span> {
+                          currentJob.results.scanMetadata.completedAt ? 
+                          new Date(currentJob.results.scanMetadata.completedAt).toLocaleTimeString() : 
+                          'N/A'
+                        }
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Features */}
+          {!currentJob && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Bot className="h-8 w-8 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">AI-Powered Analysis</h3>
+                <p className="text-muted-foreground">GPT-5 driven autonomous crawling with intelligent decision making</p>
+              </div>
+              <div className="text-center">
+                <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Scan className="h-8 w-8 text-accent" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">Complete Coverage</h3>
+                <p className="text-muted-foreground">Systematic scanning of every discoverable page using sitemaps and link discovery</p>
+              </div>
+              <div className="text-center">
+                <div className="w-16 h-16 bg-primary-glow/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Zap className="h-8 w-8 text-primary-glow" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">Real-time Updates</h3>
+                <p className="text-muted-foreground">Live progress tracking with WebSocket updates and detailed reporting</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};

@@ -1,0 +1,488 @@
+{
+  "id": "7f827c69-792c-4968-923c-14691650cccd",
+  "url": "https://skyline-air.example/",
+  "fullCrawl": false,
+  "status": "completed",
+  "createdAt": "2025-08-11T19:27:18.612Z",
+  "progress": 100,
+  "currentStep": "Per-form analysis completed - all 1 forms analyzed",
+  "results": {
+    "url": "https://skyline-air.example/",
+    "timestamp": "2025-08-11T19:27:34.607Z",
+    "jobId": "7f827c69-792c-4968-923c-14691650cccd",
+    "forms": [
+      {
+        "formId": "form-0",
+        "url": "https://skyline-air.example/",
+        "characteristics": {
+          "hasCaptcha": false,
+          "hasFileUpload": false,
+          "hasMultiStep": false,
+          "hasValidation": true,
+          "isLoginForm": false,
+          "isContactForm": false,
+          "isSearchForm": false
+        },
+        "fields": [
+          {
+            "id": "departureLocation",
+            "name": "",
+            "type": "text",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "SJC",
+            "ariaLabel": "",
+            "label": "Depart*",
+            "options": []
+          },
+          {
+            "id": "arrivalLocation",
+            "name": "",
+            "type": "text",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Arrive*",
+            "options": []
+          },
+          {
+            "id": "departureDate",
+            "name": "departureDate",
+            "type": "text",
+            "placeholder": "__/__",
+            "required": true,
+            "disabled": false,
+            "value": "08/12",
+            "ariaLabel": "Depart date in M M, D D format",
+            "label": "Depart date*",
+            "options": []
+          },
+          {
+            "id": "returnDate",
+            "name": "returnDate",
+            "type": "text",
+            "placeholder": "__/__",
+            "required": true,
+            "disabled": false,
+            "value": "08/15",
+            "ariaLabel": "Return date in M M, D D format",
+            "label": "Return date*",
+            "options": []
+          },
+          {
+            "id": "field-4",
+            "name": "passengerCount",
+            "type": "text",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "1",
+            "ariaLabel": "Passenger Selector",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "promoCode",
+            "name": "promoCode",
+            "type": "text",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "Promo code",
+            "label": "Promo code",
+            "options": []
+          },
+          {
+            "id": "field-6",
+            "name": "showPriceInPoints",
+            "type": "checkbox",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "false",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-7",
+            "name": "flexibleDates",
+            "type": "checkbox",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "false",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "bookingSubmit",
+            "name": "",
+            "type": "submit",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          }
+        ],
+        "accessibility": {
+          "score": 57,
+          "issues": [
+            "Form missing action URL for submission",
+            "Form method not specified or invalid",
+            "Some fields lack name attributes required for AI form submission",
+            "Some fields lack proper labels for AI identification"
+          ],
+          "recommendations": [
+            "STRUCTURAL: Missing action attribute - AI agents need submission endpoint, Missing or invalid method attribute - should be GET or POST",
+            "IDENTIFICATION: 2 fields missing name attributes",
+            "LABELING: Field showPriceInPoints lacks proper labeling, Field flexibleDates lacks proper labeling",
+            "DATATYPES: No semantic input types found - use email, tel, number, etc.",
+            "VALIDATION: No error message containers found",
+            "SUBMISSION: No CSRF token found - may cause submission failures",
+            "Form requires significant improvements for AI agent compatibility",
+            "HIGH: Add proper labels or ARIA labels to all fields"
+          ],
+          "categories": {
+            "structural": {
+              "score": 9,
+              "maxScore": 15,
+              "issues": [
+                "Missing action attribute - AI agents need submission endpoint",
+                "Missing or invalid method attribute - should be GET or POST"
+              ]
+            },
+            "identification": {
+              "score": 16,
+              "maxScore": 20,
+              "issues": [
+                "2 fields missing name attributes"
+              ]
+            },
+            "labeling": {
+              "score": 7,
+              "maxScore": 15,
+              "issues": [
+                "Field showPriceInPoints lacks proper labeling",
+                "Field flexibleDates lacks proper labeling"
+              ]
+            },
+            "inputHints": {
+              "score": 5,
+              "maxScore": 10,
+              "issues": []
+            },
+            "dataTypes": {
+              "score": 2,
+              "maxScore": 15,
+              "issues": [
+                "No semantic input types found - use email, tel, number, etc."
+              ]
+            },
+            "validation": {
+              "score": 7,
+              "maxScore": 10,
+              "issues": [
+                "No error message containers found"
+              ]
+            },
+            "submission": {
+              "score": 7,
+              "maxScore": 10,
+              "issues": [
+                "No CSRF token found - may cause submission failures"
+              ]
+            },
+            "accessibility": {
+              "score": 4,
+              "maxScore": 5,
+              "issues": []
+            }
+          },
+          "aiAccessibility": {
+            "hasLabels": false,
+            "hasAriaLabels": true,
+            "hasNameAttributes": true,
+            "hasValidation": true,
+            "hasCaptcha": false,
+            "hasFileUpload": false,
+            "hasProperStructure": false,
+            "hasAutocomplete": true,
+            "hasDataTypes": false
+          },
+          "fieldAnalysis": []
+        },
+        "metadata": {
+          "fieldCount": 9,
+          "hasRequiredFields": true,
+          "hasLabels": false,
+          "hasValidation": true,
+          "hasCaptcha": false,
+          "hasFileUpload": false,
+          "analysisTimestamp": "2025-08-11T19:27:33.604Z",
+          "comprehensiveAnalysis": true
+        }
+      }
+    ],
+    "summary": {
+      "totalForms": 1,
+      "totalFormsFound": 1,
+      "totalPages": 1,
+      "discoveredUrls": 1,
+      "visitedUrls": 1,
+      "coveragePercentage": 100,
+      "aiSummary": "Comprehensive per-form analysis of https://skyline-air.example/ completed using 8-category AI compatibility assessment. Successfully analyzed all 1 forms found on the page. Average AI compatibility score: 57/100. AI Compatibility Breakdown: 0/1 forms are AI-friendly (70+ score). 1 forms lack proper labels. 1 forms have validation (good for AI agents). Identified 4 issues with 8 specific recommendations across all forms. All forms have been thoroughly analyzed across structural, identification, labeling, input hints, data types, validation, submission, and accessibility categories.",
+      "scanMode": "per-form-analysis"
+    },
+    "metadata": {
+      "targetUrl": "https://skyline-air.example/",
+      "analysisTime": 15993,
+      "perFormMode": true,
+      "formsFound": 1,
+      "formsAnalyzed": 1,
+      "stoppedDueToLimit": false
+    }
+  },
+  "error": null,
+  "formsAnalyzed": 1,
+  "formsFound": 1,
+  "timestamp": "2025-08-11T19:27:34.607Z",
+  "iteration": 0,
+  "maxIterations": 5,
+  "jobId": "7f827c69-792c-4968-923c-14691650cccd",
+  "type": "form_analyzed",
+  "formsCount": 1,
+  "formData": {
+    "formId": "form-0",
+    "formIndex": 1,
+    "totalForms": 1,
+    "analysis": {
+      "formId": "form-0",
+      "url": "https://skyline-air.example/",
+      "characteristics": {
+        "hasCaptcha": false,
+        "hasFileUpload": false,
+        "hasMultiStep": false,
+        "hasValidation": true,
+        "isLoginForm": false,
+        "isContactForm": false,
+        "isSearchForm": false
+      },
+      "fields": [
+        {
+          "id": "departureLocation",
+          "name": "",
+          "type": "text",
+          "placeholder": "",
+          "required": true,
+          "disabled": false,
+          "value": "SJC",
+          "ariaLabel": "",
+          "label": "Depart*",
+          "options": []
+        },
+        {
+          "id": "arrivalLocation",
+          "name": "",
+          "type": "text",
+          "placeholder": "",
+          "required": true,
+          "disabled": false,
+          "value": "",
+          "ariaLabel": "",
+          "label": "Arrive*",
+          "options": []
+        },
+        {
+          "id": "departureDate",
+          "name": "departureDate",
+          "type": "text",
+          "placeholder": "__/__",
+          "required": true,
+          "disabled": false,
+          "value": "08/12",
+          "ariaLabel": "Depart date in M M, D D format",
+          "label": "Depart date*",
+          "options": []
+        },
+        {
+          "id": "returnDate",
+          "name": "returnDate",
+          "type": "text",
+          "placeholder": "__/__",
+          "required": true,
+          "disabled": false,
+          "value": "08/15",
+          "ariaLabel": "Return date in M M, D D format",
+          "label": "Return date*",
+          "options": []
+        },
+        {
+          "id": "field-4",
+          "name": "passengerCount",
+          "type": "text",
+          "placeholder": "",
+          "required": false,
+          "disabled": false,
+          "value": "1",
+          "ariaLabel": "Passenger Selector",
+          "label": "",
+          "options": []
+        },
+        {
+          "id": "promoCode",
+          "name": "promoCode",
+          "type": "text",
+          "placeholder": "",
+          "required": false,
+          "disabled": false,
+          "value": "",
+          "ariaLabel": "Promo code",
+          "label": "Promo code",
+          "options": []
+        },
+        {
+          "id": "field-6",
+          "name": "showPriceInPoints",
+          "type": "checkbox",
+          "placeholder": "",
+          "required": false,
+          "disabled": false,
+          "value": "false",
+          "ariaLabel": "",
+          "label": "",
+          "options": []
+        },
+        {
+          "id": "field-7",
+          "name": "flexibleDates",
+          "type": "checkbox",
+          "placeholder": "",
+          "required": false,
+          "disabled": false,
+          "value": "false",
+          "ariaLabel": "",
+          "label": "",
+          "options": []
+        },
+        {
+          "id": "bookingSubmit",
+          "name": "",
+          "type": "submit",
+          "placeholder": "",
+          "required": false,
+          "disabled": false,
+          "value": "",
+          "ariaLabel": "",
+          "label": "",
+          "options": []
+        }
+      ],
+      "accessibility": {
+        "score": 57,
+        "issues": [
+          "Form missing action URL for submission",
+          "Form method not specified or invalid",
+          "Some fields lack name attributes required for AI form submission",
+          "Some fields lack proper labels for AI identification"
+        ],
+        "recommendations": [
+          "STRUCTURAL: Missing action attribute - AI agents need submission endpoint, Missing or invalid method attribute - should be GET or POST",
+          "IDENTIFICATION: 2 fields missing name attributes",
+          "LABELING: Field showPriceInPoints lacks proper labeling, Field flexibleDates lacks proper labeling",
+          "DATATYPES: No semantic input types found - use email, tel, number, etc.",
+          "VALIDATION: No error message containers found",
+          "SUBMISSION: No CSRF token found - may cause submission failures",
+          "Form requires significant improvements for AI agent compatibility",
+          "HIGH: Add proper labels or ARIA labels to all fields"
+        ],
+        "categories": {
+          "structural": {
+            "score": 9,
+            "maxScore": 15,
+            "issues": [
+              "Missing action attribute - AI agents need submission endpoint",
+              "Missing or invalid method attribute - should be GET or POST"
+            ]
+          },
+          "identification": {
+            "score": 16,
+            "maxScore": 20,
+            "issues": [
+              "2 fields missing name attributes"
+            ]
+          },
+          "labeling": {
+            "score": 7,
+            "maxScore": 15,
+            "issues": [
+              "Field showPriceInPoints lacks proper labeling",
+              "Field flexibleDates lacks proper labeling"
+            ]
+          },
+          "inputHints": {
+            "score": 5,
+            "maxScore": 10,
+            "issues": []
+          },
+          "dataTypes": {
+            "score": 2,
+            "maxScore": 15,
+            "issues": [
+              "No semantic input types found - use email, tel, number, etc."
+            ]
+          },
+          "validation": {
+            "score": 7,
+            "maxScore": 10,
+            "issues": [
+              "No error message containers found"
+            ]
+          },
+          "submission": {
+            "score": 7,
+            "maxScore": 10,
+            "issues": [
+              "No CSRF token found - may cause submission failures"
+            ]
+          },
+          "accessibility": {
+            "score": 4,
+            "maxScore": 5,
+            "issues": []
+          }
+        },
+        "aiAccessibility": {
+          "hasLabels": false,
+          "hasAriaLabels": true,
+          "hasNameAttributes": true,
+          "hasValidation": true,
+          "hasCaptcha": false,
+          "hasFileUpload": false,
+          "hasProperStructure": false,
+          "hasAutocomplete": true,
+          "hasDataTypes": false
+        },
+        "fieldAnalysis": []
+      },
+      "metadata": {
+        "fieldCount": 9,
+        "hasRequiredFields": true,
+        "hasLabels": false,
+        "hasValidation": true,
+        "hasCaptcha": false,
+        "hasFileUpload": false,
+        "analysisTimestamp": "2025-08-11T19:27:33.604Z",
+        "comprehensiveAnalysis": true
+      }
+    }
+  }
+}

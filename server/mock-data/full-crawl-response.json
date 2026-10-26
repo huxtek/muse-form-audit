@@ -1,0 +1,3344 @@
+{
+  "id": "8b77b900-21c9-424f-b014-22c655394913",
+  "url": "https://acme-roofing.example/",
+  "fullCrawl": true,
+  "status": "completed",
+  "createdAt": "2025-08-11T18:57:44.232Z",
+  "progress": 100,
+  "currentStep": "Full crawl completed! Analyzed 14 forms across 24 pages.",
+  "results": {
+    "summary": {
+      "totalPages": 24,
+      "totalForms": 14,
+      "discoveredUrls": 24,
+      "visitedUrls": 24,
+      "coveragePercentage": 100,
+      "formsAnalyzed": 14
+    },
+    "forms": [
+      {
+        "formId": "paymentForm",
+        "url": "https://acme-roofing.example/",
+        "pageTitle": "Page 1",
+        "characteristics": {
+          "hasCaptcha": false,
+          "hasFileUpload": false,
+          "hasMultiStep": false,
+          "hasValidation": false,
+          "isLoginForm": false,
+          "isContactForm": true,
+          "isSearchForm": false
+        },
+        "fields": [
+          {
+            "id": "postName",
+            "name": "c_name",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "postEmail",
+            "name": "c_email",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "postPhone",
+            "name": "c_phone",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "postAddress",
+            "name": "c_address",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "postRoofType",
+            "name": "roofType",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "postRoofArea",
+            "name": "roofArea",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "postEstimate",
+            "name": "estimate",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          }
+        ],
+        "accessibility": {
+          "score": 19,
+          "maxScore": 100,
+          "issues": [
+            "Form lacks standard submit button"
+          ],
+          "recommendations": [
+            "STRUCTURAL: No standard submit button found - AI agents need clear submission method",
+            "INPUTHINTS: No autocomplete attributes found - helpful for AI data entry",
+            "DATATYPES: No semantic input types found - use email, tel, number, etc.",
+            "VALIDATION: No error message containers found",
+            "SUBMISSION: No CSRF token found - may cause submission failures",
+            "Form requires significant improvements for AI agent compatibility",
+            "CRITICAL: Add name attributes to all form fields",
+            "HIGH: Add proper labels or ARIA labels to all fields"
+          ],
+          "categories": {
+            "structural": {
+              "score": 12,
+              "maxScore": 15,
+              "issues": [
+                "No standard submit button found - AI agents need clear submission method"
+              ]
+            },
+            "identification": {
+              "score": 0,
+              "maxScore": 20,
+              "issues": []
+            },
+            "labeling": {
+              "score": 0,
+              "maxScore": 15,
+              "issues": []
+            },
+            "inputHints": {
+              "score": 0,
+              "maxScore": 10,
+              "issues": [
+                "No autocomplete attributes found - helpful for AI data entry"
+              ]
+            },
+            "dataTypes": {
+              "score": 0,
+              "maxScore": 15,
+              "issues": [
+                "No semantic input types found - use email, tel, number, etc."
+              ]
+            },
+            "validation": {
+              "score": 0,
+              "maxScore": 10,
+              "issues": [
+                "No error message containers found"
+              ]
+            },
+            "submission": {
+              "score": 7,
+              "maxScore": 10,
+              "issues": [
+                "No CSRF token found - may cause submission failures"
+              ]
+            },
+            "accessibility": {
+              "score": 0,
+              "maxScore": 5,
+              "issues": []
+            }
+          },
+          "aiAccessibility": {
+            "hasLabels": false,
+            "hasAriaLabels": false,
+            "hasNameAttributes": false,
+            "hasValidation": false,
+            "hasCaptcha": false,
+            "hasFileUpload": false,
+            "hasProperStructure": true,
+            "hasAutocomplete": false,
+            "hasDataTypes": false
+          },
+          "fieldAnalysis": []
+        },
+        "analyzedAt": "2025-08-11T18:58:45.373Z",
+        "globalFormIndex": 0
+      },
+      {
+        "formId": "form-1",
+        "url": "https://acme-roofing.example/",
+        "pageTitle": "Page 1",
+        "characteristics": {
+          "hasCaptcha": true,
+          "hasFileUpload": false,
+          "hasMultiStep": false,
+          "hasValidation": true,
+          "isLoginForm": false,
+          "isContactForm": true,
+          "isSearchForm": true
+        },
+        "fields": [
+          {
+            "id": "field-0",
+            "name": "post_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "8",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-1",
+            "name": "form_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "931f74b",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-2",
+            "name": "referer_title",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "#1 Roofing Contractor in America | acme-roofing.example",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-3",
+            "name": "queried_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "8",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "form-field-address",
+            "name": "form_fields[address]",
+            "type": "text",
+            "placeholder": "Enter Your Address",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Address",
+            "options": []
+          },
+          {
+            "id": "form-field-name",
+            "name": "form_fields[name]",
+            "type": "text",
+            "placeholder": "Full Name",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Name",
+            "options": []
+          },
+          {
+            "id": "form-field-field_e42fbeb",
+            "name": "form_fields[field_e42fbeb]",
+            "type": "email",
+            "placeholder": "Email Address",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Email",
+            "options": []
+          },
+          {
+            "id": "form-field-phone",
+            "name": "form_fields[phone]",
+            "type": "tel",
+            "placeholder": "+1",
+            "required": true,
+            "disabled": false,
+            "value": "+1",
+            "ariaLabel": "",
+            "label": "Phone\t\t\t\t\t\t\t\n\t\t\t\t\t\t\t\tPhone",
+            "options": []
+          },
+          {
+            "id": "field-8",
+            "name": "",
+            "type": "submit",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          }
+        ],
+        "accessibility": {
+          "score": 57,
+          "maxScore": 100,
+          "issues": [
+            "Form missing action URL for submission",
+            "CAPTCHA present - prevents AI form submission"
+          ],
+          "recommendations": [
+            "STRUCTURAL: Missing action attribute - AI agents need submission endpoint",
+            "INPUTHINTS: No autocomplete attributes found - helpful for AI data entry",
+            "VALIDATION: No error message containers found",
+            "SUBMISSION: CAPTCHA detected - major blocker for AI agents, No CSRF token found - may cause submission failures",
+            "Form requires significant improvements for AI agent compatibility",
+            "CRITICAL: Remove or provide alternatives to CAPTCHA for AI agents"
+          ],
+          "categories": {
+            "structural": {
+              "score": 12,
+              "maxScore": 15,
+              "issues": [
+                "Missing action attribute - AI agents need submission endpoint"
+              ]
+            },
+            "identification": {
+              "score": 20,
+              "maxScore": 20,
+              "issues": []
+            },
+            "labeling": {
+              "score": 8,
+              "maxScore": 15,
+              "issues": []
+            },
+            "inputHints": {
+              "score": 4,
+              "maxScore": 10,
+              "issues": [
+                "No autocomplete attributes found - helpful for AI data entry"
+              ]
+            },
+            "dataTypes": {
+              "score": 7,
+              "maxScore": 15,
+              "issues": []
+            },
+            "validation": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "No error message containers found"
+              ]
+            },
+            "submission": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "CAPTCHA detected - major blocker for AI agents",
+                "No CSRF token found - may cause submission failures"
+              ]
+            },
+            "accessibility": {
+              "score": 0,
+              "maxScore": 5,
+              "issues": []
+            }
+          },
+          "aiAccessibility": {
+            "hasLabels": true,
+            "hasAriaLabels": false,
+            "hasNameAttributes": true,
+            "hasValidation": true,
+            "hasCaptcha": true,
+            "hasFileUpload": false,
+            "hasProperStructure": true,
+            "hasAutocomplete": false,
+            "hasDataTypes": true
+          },
+          "fieldAnalysis": []
+        },
+        "analyzedAt": "2025-08-11T18:58:45.678Z",
+        "globalFormIndex": 1
+      },
+      {
+        "formId": "form-2",
+        "url": "https://acme-roofing.example/",
+        "pageTitle": "Page 1",
+        "characteristics": {
+          "hasCaptcha": true,
+          "hasFileUpload": false,
+          "hasMultiStep": false,
+          "hasValidation": true,
+          "isLoginForm": false,
+          "isContactForm": true,
+          "isSearchForm": true
+        },
+        "fields": [
+          {
+            "id": "field-0",
+            "name": "post_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "115",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-1",
+            "name": "form_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "48758b9",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-2",
+            "name": "referer_title",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "#1 Roofing Contractor in America | acme-roofing.example",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-3",
+            "name": "queried_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "8",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "form-field-field_0cb03e5",
+            "name": "form_fields[field_0cb03e5]",
+            "type": "text",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Full Name",
+            "options": []
+          },
+          {
+            "id": "form-field-formAddress",
+            "name": "form_fields[formAddress]",
+            "type": "text",
+            "placeholder": "Enter Property Address",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Address",
+            "options": []
+          },
+          {
+            "id": "form-field-email",
+            "name": "form_fields[email]",
+            "type": "email",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Email",
+            "options": []
+          },
+          {
+            "id": "form-field-phone",
+            "name": "form_fields[phone]",
+            "type": "tel",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "+1",
+            "ariaLabel": "",
+            "label": "Phone\t\t\t\t\t\t\t\n\t\t\t\t\t\t\t\tPhone",
+            "options": []
+          },
+          {
+            "id": "form-field-field_6ae8d6b",
+            "name": "form_fields[field_6ae8d6b]",
+            "type": "select",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Choose Service*",
+            "options": [
+              {
+                "value": "",
+                "text": "- Choose Service -"
+              },
+              {
+                "value": "Residential Roofing",
+                "text": "Residential Roofing"
+              },
+              {
+                "value": "Solar Panel Installation",
+                "text": "Solar Panel Installation"
+              },
+              {
+                "value": "Holiday Light Installation",
+                "text": "Holiday Light Installation"
+              },
+              {
+                "value": "Commercial Roofing",
+                "text": "Commercial Roofing"
+              },
+              {
+                "value": "Waterproofing",
+                "text": "Waterproofing"
+              },
+              {
+                "value": "Gutter Installation",
+                "text": "Gutter Installation"
+              },
+              {
+                "value": "Roof Repair",
+                "text": "Roof Repair"
+              },
+              {
+                "value": "Roof Installation / Roof Replacement",
+                "text": "Roof Installation / Roof Replacement"
+              }
+            ]
+          },
+          {
+            "id": "form-field-message",
+            "name": "form_fields[message]",
+            "type": "textarea",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Message",
+            "options": []
+          },
+          {
+            "id": "field-10",
+            "name": "",
+            "type": "submit",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          }
+        ],
+        "accessibility": {
+          "score": 53,
+          "maxScore": 100,
+          "issues": [
+            "Form missing action URL for submission",
+            "CAPTCHA present - prevents AI form submission"
+          ],
+          "recommendations": [
+            "STRUCTURAL: Missing action attribute - AI agents need submission endpoint",
+            "INPUTHINTS: No autocomplete attributes found - helpful for AI data entry",
+            "VALIDATION: No error message containers found",
+            "SUBMISSION: CAPTCHA detected - major blocker for AI agents, No CSRF token found - may cause submission failures",
+            "Form requires significant improvements for AI agent compatibility",
+            "CRITICAL: Remove or provide alternatives to CAPTCHA for AI agents"
+          ],
+          "categories": {
+            "structural": {
+              "score": 12,
+              "maxScore": 15,
+              "issues": [
+                "Missing action attribute - AI agents need submission endpoint"
+              ]
+            },
+            "identification": {
+              "score": 20,
+              "maxScore": 20,
+              "issues": []
+            },
+            "labeling": {
+              "score": 8,
+              "maxScore": 15,
+              "issues": []
+            },
+            "inputHints": {
+              "score": 1,
+              "maxScore": 10,
+              "issues": [
+                "No autocomplete attributes found - helpful for AI data entry"
+              ]
+            },
+            "dataTypes": {
+              "score": 6,
+              "maxScore": 15,
+              "issues": []
+            },
+            "validation": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "No error message containers found"
+              ]
+            },
+            "submission": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "CAPTCHA detected - major blocker for AI agents",
+                "No CSRF token found - may cause submission failures"
+              ]
+            },
+            "accessibility": {
+              "score": 0,
+              "maxScore": 5,
+              "issues": []
+            }
+          },
+          "aiAccessibility": {
+            "hasLabels": true,
+            "hasAriaLabels": false,
+            "hasNameAttributes": true,
+            "hasValidation": true,
+            "hasCaptcha": true,
+            "hasFileUpload": false,
+            "hasProperStructure": true,
+            "hasAutocomplete": false,
+            "hasDataTypes": true
+          },
+          "fieldAnalysis": []
+        },
+        "analyzedAt": "2025-08-11T18:58:45.983Z",
+        "globalFormIndex": 2
+      },
+      {
+        "formId": "form-0",
+        "url": "https://acme-roofing.example/services/",
+        "pageTitle": "Page 3",
+        "characteristics": {
+          "hasCaptcha": true,
+          "hasFileUpload": false,
+          "hasMultiStep": false,
+          "hasValidation": true,
+          "isLoginForm": false,
+          "isContactForm": true,
+          "isSearchForm": true
+        },
+        "fields": [
+          {
+            "id": "field-0",
+            "name": "post_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "115",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-1",
+            "name": "form_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "48758b9",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-2",
+            "name": "referer_title",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "Roofing Services | acme-roofing.example",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-3",
+            "name": "queried_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "574",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "form-field-field_0cb03e5",
+            "name": "form_fields[field_0cb03e5]",
+            "type": "text",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Full Name",
+            "options": []
+          },
+          {
+            "id": "form-field-formAddress",
+            "name": "form_fields[formAddress]",
+            "type": "text",
+            "placeholder": "Enter Property Address",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Address",
+            "options": []
+          },
+          {
+            "id": "form-field-email",
+            "name": "form_fields[email]",
+            "type": "email",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Email",
+            "options": []
+          },
+          {
+            "id": "form-field-phone",
+            "name": "form_fields[phone]",
+            "type": "tel",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "+1",
+            "ariaLabel": "",
+            "label": "Phone",
+            "options": []
+          },
+          {
+            "id": "form-field-field_6ae8d6b",
+            "name": "form_fields[field_6ae8d6b]",
+            "type": "select",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Choose Service*",
+            "options": [
+              {
+                "value": "",
+                "text": "- Choose Service -"
+              },
+              {
+                "value": "Residential Roofing",
+                "text": "Residential Roofing"
+              },
+              {
+                "value": "Solar Panel Installation",
+                "text": "Solar Panel Installation"
+              },
+              {
+                "value": "Holiday Light Installation",
+                "text": "Holiday Light Installation"
+              },
+              {
+                "value": "Commercial Roofing",
+                "text": "Commercial Roofing"
+              },
+              {
+                "value": "Waterproofing",
+                "text": "Waterproofing"
+              },
+              {
+                "value": "Gutter Installation",
+                "text": "Gutter Installation"
+              },
+              {
+                "value": "Roof Repair",
+                "text": "Roof Repair"
+              },
+              {
+                "value": "Roof Installation / Roof Replacement",
+                "text": "Roof Installation / Roof Replacement"
+              }
+            ]
+          },
+          {
+            "id": "form-field-message",
+            "name": "form_fields[message]",
+            "type": "textarea",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Message",
+            "options": []
+          },
+          {
+            "id": "field-10",
+            "name": "",
+            "type": "submit",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          }
+        ],
+        "accessibility": {
+          "score": 53,
+          "maxScore": 100,
+          "issues": [
+            "Form missing action URL for submission",
+            "CAPTCHA present - prevents AI form submission"
+          ],
+          "recommendations": [
+            "STRUCTURAL: Missing action attribute - AI agents need submission endpoint",
+            "INPUTHINTS: No autocomplete attributes found - helpful for AI data entry",
+            "VALIDATION: No error message containers found",
+            "SUBMISSION: CAPTCHA detected - major blocker for AI agents, No CSRF token found - may cause submission failures",
+            "Form requires significant improvements for AI agent compatibility",
+            "CRITICAL: Remove or provide alternatives to CAPTCHA for AI agents"
+          ],
+          "categories": {
+            "structural": {
+              "score": 12,
+              "maxScore": 15,
+              "issues": [
+                "Missing action attribute - AI agents need submission endpoint"
+              ]
+            },
+            "identification": {
+              "score": 20,
+              "maxScore": 20,
+              "issues": []
+            },
+            "labeling": {
+              "score": 8,
+              "maxScore": 15,
+              "issues": []
+            },
+            "inputHints": {
+              "score": 1,
+              "maxScore": 10,
+              "issues": [
+                "No autocomplete attributes found - helpful for AI data entry"
+              ]
+            },
+            "dataTypes": {
+              "score": 6,
+              "maxScore": 15,
+              "issues": []
+            },
+            "validation": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "No error message containers found"
+              ]
+            },
+            "submission": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "CAPTCHA detected - major blocker for AI agents",
+                "No CSRF token found - may cause submission failures"
+              ]
+            },
+            "accessibility": {
+              "score": 0,
+              "maxScore": 5,
+              "issues": []
+            }
+          },
+          "aiAccessibility": {
+            "hasLabels": true,
+            "hasAriaLabels": false,
+            "hasNameAttributes": true,
+            "hasValidation": true,
+            "hasCaptcha": true,
+            "hasFileUpload": false,
+            "hasProperStructure": true,
+            "hasAutocomplete": false,
+            "hasDataTypes": true
+          },
+          "fieldAnalysis": []
+        },
+        "analyzedAt": "2025-08-11T18:58:46.288Z",
+        "globalFormIndex": 3
+      },
+      {
+        "formId": "form-0",
+        "url": "https://acme-roofing.example/services/roof-replacement/",
+        "pageTitle": "Page 4",
+        "characteristics": {
+          "hasCaptcha": false,
+          "hasFileUpload": false,
+          "hasMultiStep": false,
+          "hasValidation": true,
+          "isLoginForm": false,
+          "isContactForm": true,
+          "isSearchForm": true
+        },
+        "fields": [
+          {
+            "id": "field-0",
+            "name": "post_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "1197",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-1",
+            "name": "form_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "7802420",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-2",
+            "name": "referer_title",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "Roof Replacement | acme-roofing.example",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-3",
+            "name": "queried_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "1197",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "form-field-address",
+            "name": "form_fields[address]",
+            "type": "text",
+            "placeholder": "Enter Property Address*",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Address",
+            "options": []
+          },
+          {
+            "id": "form-field-name",
+            "name": "form_fields[name]",
+            "type": "text",
+            "placeholder": "Full Name",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Name",
+            "options": []
+          },
+          {
+            "id": "form-field-phone",
+            "name": "form_fields[phone]",
+            "type": "tel",
+            "placeholder": "+1",
+            "required": true,
+            "disabled": false,
+            "value": "+1",
+            "ariaLabel": "",
+            "label": "Phone\t\t\t\t\t\t\t\n\t\t\t\t\t\t\t\tPhone",
+            "options": []
+          },
+          {
+            "id": "field-7",
+            "name": "",
+            "type": "submit",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          }
+        ],
+        "accessibility": {
+          "score": 60,
+          "maxScore": 100,
+          "issues": [
+            "Form missing action URL for submission"
+          ],
+          "recommendations": [
+            "STRUCTURAL: Missing action attribute - AI agents need submission endpoint",
+            "INPUTHINTS: No autocomplete attributes found - helpful for AI data entry",
+            "VALIDATION: No error message containers found",
+            "SUBMISSION: No CSRF token found - may cause submission failures",
+            "Form requires significant improvements for AI agent compatibility"
+          ],
+          "categories": {
+            "structural": {
+              "score": 12,
+              "maxScore": 15,
+              "issues": [
+                "Missing action attribute - AI agents need submission endpoint"
+              ]
+            },
+            "identification": {
+              "score": 20,
+              "maxScore": 20,
+              "issues": []
+            },
+            "labeling": {
+              "score": 8,
+              "maxScore": 15,
+              "issues": []
+            },
+            "inputHints": {
+              "score": 4,
+              "maxScore": 10,
+              "issues": [
+                "No autocomplete attributes found - helpful for AI data entry"
+              ]
+            },
+            "dataTypes": {
+              "score": 6,
+              "maxScore": 15,
+              "issues": []
+            },
+            "validation": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "No error message containers found"
+              ]
+            },
+            "submission": {
+              "score": 7,
+              "maxScore": 10,
+              "issues": [
+                "No CSRF token found - may cause submission failures"
+              ]
+            },
+            "accessibility": {
+              "score": 0,
+              "maxScore": 5,
+              "issues": []
+            }
+          },
+          "aiAccessibility": {
+            "hasLabels": true,
+            "hasAriaLabels": false,
+            "hasNameAttributes": true,
+            "hasValidation": true,
+            "hasCaptcha": false,
+            "hasFileUpload": false,
+            "hasProperStructure": true,
+            "hasAutocomplete": false,
+            "hasDataTypes": true
+          },
+          "fieldAnalysis": []
+        },
+        "analyzedAt": "2025-08-11T18:58:46.597Z",
+        "globalFormIndex": 4
+      },
+      {
+        "formId": "form-1",
+        "url": "https://acme-roofing.example/services/roof-replacement/",
+        "pageTitle": "Page 4",
+        "characteristics": {
+          "hasCaptcha": true,
+          "hasFileUpload": false,
+          "hasMultiStep": false,
+          "hasValidation": true,
+          "isLoginForm": false,
+          "isContactForm": true,
+          "isSearchForm": true
+        },
+        "fields": [
+          {
+            "id": "field-0",
+            "name": "post_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "115",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-1",
+            "name": "form_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "48758b9",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-2",
+            "name": "referer_title",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "Roof Replacement | acme-roofing.example",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-3",
+            "name": "queried_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "1197",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "form-field-field_0cb03e5",
+            "name": "form_fields[field_0cb03e5]",
+            "type": "text",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Full Name",
+            "options": []
+          },
+          {
+            "id": "form-field-formAddress",
+            "name": "form_fields[formAddress]",
+            "type": "text",
+            "placeholder": "Enter Property Address",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Address",
+            "options": []
+          },
+          {
+            "id": "form-field-email",
+            "name": "form_fields[email]",
+            "type": "email",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Email",
+            "options": []
+          },
+          {
+            "id": "form-field-phone",
+            "name": "form_fields[phone]",
+            "type": "tel",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "+1",
+            "ariaLabel": "",
+            "label": "Phone\t\t\t\t\t\t\t\n\t\t\t\t\t\t\t\tPhone",
+            "options": []
+          },
+          {
+            "id": "form-field-field_6ae8d6b",
+            "name": "form_fields[field_6ae8d6b]",
+            "type": "select",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Choose Service*",
+            "options": [
+              {
+                "value": "",
+                "text": "- Choose Service -"
+              },
+              {
+                "value": "Residential Roofing",
+                "text": "Residential Roofing"
+              },
+              {
+                "value": "Solar Panel Installation",
+                "text": "Solar Panel Installation"
+              },
+              {
+                "value": "Holiday Light Installation",
+                "text": "Holiday Light Installation"
+              },
+              {
+                "value": "Commercial Roofing",
+                "text": "Commercial Roofing"
+              },
+              {
+                "value": "Waterproofing",
+                "text": "Waterproofing"
+              },
+              {
+                "value": "Gutter Installation",
+                "text": "Gutter Installation"
+              },
+              {
+                "value": "Roof Repair",
+                "text": "Roof Repair"
+              },
+              {
+                "value": "Roof Installation / Roof Replacement",
+                "text": "Roof Installation / Roof Replacement"
+              }
+            ]
+          },
+          {
+            "id": "form-field-message",
+            "name": "form_fields[message]",
+            "type": "textarea",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Message",
+            "options": []
+          },
+          {
+            "id": "field-10",
+            "name": "",
+            "type": "submit",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          }
+        ],
+        "accessibility": {
+          "score": 53,
+          "maxScore": 100,
+          "issues": [
+            "Form missing action URL for submission",
+            "CAPTCHA present - prevents AI form submission"
+          ],
+          "recommendations": [
+            "STRUCTURAL: Missing action attribute - AI agents need submission endpoint",
+            "INPUTHINTS: No autocomplete attributes found - helpful for AI data entry",
+            "VALIDATION: No error message containers found",
+            "SUBMISSION: CAPTCHA detected - major blocker for AI agents, No CSRF token found - may cause submission failures",
+            "Form requires significant improvements for AI agent compatibility",
+            "CRITICAL: Remove or provide alternatives to CAPTCHA for AI agents"
+          ],
+          "categories": {
+            "structural": {
+              "score": 12,
+              "maxScore": 15,
+              "issues": [
+                "Missing action attribute - AI agents need submission endpoint"
+              ]
+            },
+            "identification": {
+              "score": 20,
+              "maxScore": 20,
+              "issues": []
+            },
+            "labeling": {
+              "score": 8,
+              "maxScore": 15,
+              "issues": []
+            },
+            "inputHints": {
+              "score": 1,
+              "maxScore": 10,
+              "issues": [
+                "No autocomplete attributes found - helpful for AI data entry"
+              ]
+            },
+            "dataTypes": {
+              "score": 6,
+              "maxScore": 15,
+              "issues": []
+            },
+            "validation": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "No error message containers found"
+              ]
+            },
+            "submission": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "CAPTCHA detected - major blocker for AI agents",
+                "No CSRF token found - may cause submission failures"
+              ]
+            },
+            "accessibility": {
+              "score": 0,
+              "maxScore": 5,
+              "issues": []
+            }
+          },
+          "aiAccessibility": {
+            "hasLabels": true,
+            "hasAriaLabels": false,
+            "hasNameAttributes": true,
+            "hasValidation": true,
+            "hasCaptcha": true,
+            "hasFileUpload": false,
+            "hasProperStructure": true,
+            "hasAutocomplete": false,
+            "hasDataTypes": true
+          },
+          "fieldAnalysis": []
+        },
+        "analyzedAt": "2025-08-11T18:58:46.904Z",
+        "globalFormIndex": 5
+      },
+      {
+        "formId": "form-0",
+        "url": "https://acme-roofing.example/services/roof-inspection/",
+        "pageTitle": "Page 5",
+        "characteristics": {
+          "hasCaptcha": true,
+          "hasFileUpload": false,
+          "hasMultiStep": false,
+          "hasValidation": true,
+          "isLoginForm": false,
+          "isContactForm": true,
+          "isSearchForm": true
+        },
+        "fields": [
+          {
+            "id": "field-0",
+            "name": "post_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "7502",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-1",
+            "name": "form_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "1453981",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-2",
+            "name": "referer_title",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "Roof Inspection | FREE for Homes and Businesses | acme-roofing.example",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-3",
+            "name": "queried_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "7502",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "form-field-address",
+            "name": "form_fields[address]",
+            "type": "text",
+            "placeholder": "Enter Your Address",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Address",
+            "options": []
+          },
+          {
+            "id": "form-field-name",
+            "name": "form_fields[name]",
+            "type": "text",
+            "placeholder": "Full Name",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Name",
+            "options": []
+          },
+          {
+            "id": "form-field-field_e42fbeb",
+            "name": "form_fields[field_e42fbeb]",
+            "type": "email",
+            "placeholder": "Email Address",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Email",
+            "options": []
+          },
+          {
+            "id": "form-field-phone",
+            "name": "form_fields[phone]",
+            "type": "tel",
+            "placeholder": "+1",
+            "required": true,
+            "disabled": false,
+            "value": "+1",
+            "ariaLabel": "",
+            "label": "Phone\t\t\t\t\t\t\t\n\t\t\t\t\t\t\t\tPhone",
+            "options": []
+          },
+          {
+            "id": "field-8",
+            "name": "",
+            "type": "submit",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          }
+        ],
+        "accessibility": {
+          "score": 57,
+          "maxScore": 100,
+          "issues": [
+            "Form missing action URL for submission",
+            "CAPTCHA present - prevents AI form submission"
+          ],
+          "recommendations": [
+            "STRUCTURAL: Missing action attribute - AI agents need submission endpoint",
+            "INPUTHINTS: No autocomplete attributes found - helpful for AI data entry",
+            "VALIDATION: No error message containers found",
+            "SUBMISSION: CAPTCHA detected - major blocker for AI agents, No CSRF token found - may cause submission failures",
+            "Form requires significant improvements for AI agent compatibility",
+            "CRITICAL: Remove or provide alternatives to CAPTCHA for AI agents"
+          ],
+          "categories": {
+            "structural": {
+              "score": 12,
+              "maxScore": 15,
+              "issues": [
+                "Missing action attribute - AI agents need submission endpoint"
+              ]
+            },
+            "identification": {
+              "score": 20,
+              "maxScore": 20,
+              "issues": []
+            },
+            "labeling": {
+              "score": 8,
+              "maxScore": 15,
+              "issues": []
+            },
+            "inputHints": {
+              "score": 4,
+              "maxScore": 10,
+              "issues": [
+                "No autocomplete attributes found - helpful for AI data entry"
+              ]
+            },
+            "dataTypes": {
+              "score": 7,
+              "maxScore": 15,
+              "issues": []
+            },
+            "validation": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "No error message containers found"
+              ]
+            },
+            "submission": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "CAPTCHA detected - major blocker for AI agents",
+                "No CSRF token found - may cause submission failures"
+              ]
+            },
+            "accessibility": {
+              "score": 0,
+              "maxScore": 5,
+              "issues": []
+            }
+          },
+          "aiAccessibility": {
+            "hasLabels": true,
+            "hasAriaLabels": false,
+            "hasNameAttributes": true,
+            "hasValidation": true,
+            "hasCaptcha": true,
+            "hasFileUpload": false,
+            "hasProperStructure": true,
+            "hasAutocomplete": false,
+            "hasDataTypes": true
+          },
+          "fieldAnalysis": []
+        },
+        "analyzedAt": "2025-08-11T18:58:47.210Z",
+        "globalFormIndex": 6
+      },
+      {
+        "formId": "form-1",
+        "url": "https://acme-roofing.example/services/roof-inspection/",
+        "pageTitle": "Page 5",
+        "characteristics": {
+          "hasCaptcha": true,
+          "hasFileUpload": false,
+          "hasMultiStep": false,
+          "hasValidation": true,
+          "isLoginForm": false,
+          "isContactForm": true,
+          "isSearchForm": true
+        },
+        "fields": [
+          {
+            "id": "field-0",
+            "name": "post_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "115",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-1",
+            "name": "form_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "48758b9",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-2",
+            "name": "referer_title",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "Roof Inspection | FREE for Homes and Businesses | acme-roofing.example",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-3",
+            "name": "queried_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "7502",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "form-field-field_0cb03e5",
+            "name": "form_fields[field_0cb03e5]",
+            "type": "text",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Full Name",
+            "options": []
+          },
+          {
+            "id": "form-field-formAddress",
+            "name": "form_fields[formAddress]",
+            "type": "text",
+            "placeholder": "Enter Property Address",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Address",
+            "options": []
+          },
+          {
+            "id": "form-field-email",
+            "name": "form_fields[email]",
+            "type": "email",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Email",
+            "options": []
+          },
+          {
+            "id": "form-field-phone",
+            "name": "form_fields[phone]",
+            "type": "tel",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "+1",
+            "ariaLabel": "",
+            "label": "Phone\t\t\t\t\t\t\t\n\t\t\t\t\t\t\t\tPhone",
+            "options": []
+          },
+          {
+            "id": "form-field-field_6ae8d6b",
+            "name": "form_fields[field_6ae8d6b]",
+            "type": "select",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Choose Service*",
+            "options": [
+              {
+                "value": "",
+                "text": "- Choose Service -"
+              },
+              {
+                "value": "Residential Roofing",
+                "text": "Residential Roofing"
+              },
+              {
+                "value": "Solar Panel Installation",
+                "text": "Solar Panel Installation"
+              },
+              {
+                "value": "Holiday Light Installation",
+                "text": "Holiday Light Installation"
+              },
+              {
+                "value": "Commercial Roofing",
+                "text": "Commercial Roofing"
+              },
+              {
+                "value": "Waterproofing",
+                "text": "Waterproofing"
+              },
+              {
+                "value": "Gutter Installation",
+                "text": "Gutter Installation"
+              },
+              {
+                "value": "Roof Repair",
+                "text": "Roof Repair"
+              },
+              {
+                "value": "Roof Installation / Roof Replacement",
+                "text": "Roof Installation / Roof Replacement"
+              }
+            ]
+          },
+          {
+            "id": "form-field-message",
+            "name": "form_fields[message]",
+            "type": "textarea",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Message",
+            "options": []
+          },
+          {
+            "id": "field-10",
+            "name": "",
+            "type": "submit",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          }
+        ],
+        "accessibility": {
+          "score": 53,
+          "maxScore": 100,
+          "issues": [
+            "Form missing action URL for submission",
+            "CAPTCHA present - prevents AI form submission"
+          ],
+          "recommendations": [
+            "STRUCTURAL: Missing action attribute - AI agents need submission endpoint",
+            "INPUTHINTS: No autocomplete attributes found - helpful for AI data entry",
+            "VALIDATION: No error message containers found",
+            "SUBMISSION: CAPTCHA detected - major blocker for AI agents, No CSRF token found - may cause submission failures",
+            "Form requires significant improvements for AI agent compatibility",
+            "CRITICAL: Remove or provide alternatives to CAPTCHA for AI agents"
+          ],
+          "categories": {
+            "structural": {
+              "score": 12,
+              "maxScore": 15,
+              "issues": [
+                "Missing action attribute - AI agents need submission endpoint"
+              ]
+            },
+            "identification": {
+              "score": 20,
+              "maxScore": 20,
+              "issues": []
+            },
+            "labeling": {
+              "score": 8,
+              "maxScore": 15,
+              "issues": []
+            },
+            "inputHints": {
+              "score": 1,
+              "maxScore": 10,
+              "issues": [
+                "No autocomplete attributes found - helpful for AI data entry"
+              ]
+            },
+            "dataTypes": {
+              "score": 6,
+              "maxScore": 15,
+              "issues": []
+            },
+            "validation": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "No error message containers found"
+              ]
+            },
+            "submission": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "CAPTCHA detected - major blocker for AI agents",
+                "No CSRF token found - may cause submission failures"
+              ]
+            },
+            "accessibility": {
+              "score": 0,
+              "maxScore": 5,
+              "issues": []
+            }
+          },
+          "aiAccessibility": {
+            "hasLabels": true,
+            "hasAriaLabels": false,
+            "hasNameAttributes": true,
+            "hasValidation": true,
+            "hasCaptcha": true,
+            "hasFileUpload": false,
+            "hasProperStructure": true,
+            "hasAutocomplete": false,
+            "hasDataTypes": true
+          },
+          "fieldAnalysis": []
+        },
+        "analyzedAt": "2025-08-11T18:58:47.516Z",
+        "globalFormIndex": 7
+      },
+      {
+        "formId": "form-0",
+        "url": "https://acme-roofing.example/services/roof-insurance-claim/",
+        "pageTitle": "Page 6",
+        "characteristics": {
+          "hasCaptcha": true,
+          "hasFileUpload": false,
+          "hasMultiStep": false,
+          "hasValidation": true,
+          "isLoginForm": false,
+          "isContactForm": true,
+          "isSearchForm": true
+        },
+        "fields": [
+          {
+            "id": "field-0",
+            "name": "post_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "8641",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-1",
+            "name": "form_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "a9b9423",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-2",
+            "name": "referer_title",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "Roof Insurance Claim Experts | acme-roofing.example",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-3",
+            "name": "queried_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "8641",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "form-field-address",
+            "name": "form_fields[address]",
+            "type": "text",
+            "placeholder": "Enter Your Address",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Address",
+            "options": []
+          },
+          {
+            "id": "form-field-name",
+            "name": "form_fields[name]",
+            "type": "text",
+            "placeholder": "Full Name",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Name",
+            "options": []
+          },
+          {
+            "id": "form-field-field_e42fbeb",
+            "name": "form_fields[field_e42fbeb]",
+            "type": "email",
+            "placeholder": "Email Address",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Email",
+            "options": []
+          },
+          {
+            "id": "form-field-phone",
+            "name": "form_fields[phone]",
+            "type": "tel",
+            "placeholder": "+1",
+            "required": true,
+            "disabled": false,
+            "value": "+1",
+            "ariaLabel": "",
+            "label": "Phone\t\t\t\t\t\t\t\n\t\t\t\t\t\t\t\tPhone",
+            "options": []
+          },
+          {
+            "id": "field-8",
+            "name": "",
+            "type": "submit",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          }
+        ],
+        "accessibility": {
+          "score": 57,
+          "maxScore": 100,
+          "issues": [
+            "Form missing action URL for submission",
+            "CAPTCHA present - prevents AI form submission"
+          ],
+          "recommendations": [
+            "STRUCTURAL: Missing action attribute - AI agents need submission endpoint",
+            "INPUTHINTS: No autocomplete attributes found - helpful for AI data entry",
+            "VALIDATION: No error message containers found",
+            "SUBMISSION: CAPTCHA detected - major blocker for AI agents, No CSRF token found - may cause submission failures",
+            "Form requires significant improvements for AI agent compatibility",
+            "CRITICAL: Remove or provide alternatives to CAPTCHA for AI agents"
+          ],
+          "categories": {
+            "structural": {
+              "score": 12,
+              "maxScore": 15,
+              "issues": [
+                "Missing action attribute - AI agents need submission endpoint"
+              ]
+            },
+            "identification": {
+              "score": 20,
+              "maxScore": 20,
+              "issues": []
+            },
+            "labeling": {
+              "score": 8,
+              "maxScore": 15,
+              "issues": []
+            },
+            "inputHints": {
+              "score": 4,
+              "maxScore": 10,
+              "issues": [
+                "No autocomplete attributes found - helpful for AI data entry"
+              ]
+            },
+            "dataTypes": {
+              "score": 7,
+              "maxScore": 15,
+              "issues": []
+            },
+            "validation": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "No error message containers found"
+              ]
+            },
+            "submission": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "CAPTCHA detected - major blocker for AI agents",
+                "No CSRF token found - may cause submission failures"
+              ]
+            },
+            "accessibility": {
+              "score": 0,
+              "maxScore": 5,
+              "issues": []
+            }
+          },
+          "aiAccessibility": {
+            "hasLabels": true,
+            "hasAriaLabels": false,
+            "hasNameAttributes": true,
+            "hasValidation": true,
+            "hasCaptcha": true,
+            "hasFileUpload": false,
+            "hasProperStructure": true,
+            "hasAutocomplete": false,
+            "hasDataTypes": true
+          },
+          "fieldAnalysis": []
+        },
+        "analyzedAt": "2025-08-11T18:58:47.825Z",
+        "globalFormIndex": 8
+      },
+      {
+        "formId": "form-1",
+        "url": "https://acme-roofing.example/services/roof-insurance-claim/",
+        "pageTitle": "Page 6",
+        "characteristics": {
+          "hasCaptcha": true,
+          "hasFileUpload": false,
+          "hasMultiStep": false,
+          "hasValidation": true,
+          "isLoginForm": false,
+          "isContactForm": true,
+          "isSearchForm": true
+        },
+        "fields": [
+          {
+            "id": "field-0",
+            "name": "post_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "115",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-1",
+            "name": "form_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "48758b9",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-2",
+            "name": "referer_title",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "Roof Insurance Claim Experts | acme-roofing.example",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-3",
+            "name": "queried_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "8641",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "form-field-field_0cb03e5",
+            "name": "form_fields[field_0cb03e5]",
+            "type": "text",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Full Name",
+            "options": []
+          },
+          {
+            "id": "form-field-formAddress",
+            "name": "form_fields[formAddress]",
+            "type": "text",
+            "placeholder": "Enter Property Address",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Address",
+            "options": []
+          },
+          {
+            "id": "form-field-email",
+            "name": "form_fields[email]",
+            "type": "email",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Email",
+            "options": []
+          },
+          {
+            "id": "form-field-phone",
+            "name": "form_fields[phone]",
+            "type": "tel",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "+1",
+            "ariaLabel": "",
+            "label": "Phone\t\t\t\t\t\t\t\n\t\t\t\t\t\t\t\tPhone",
+            "options": []
+          },
+          {
+            "id": "form-field-field_6ae8d6b",
+            "name": "form_fields[field_6ae8d6b]",
+            "type": "select",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Choose Service*",
+            "options": [
+              {
+                "value": "",
+                "text": "- Choose Service -"
+              },
+              {
+                "value": "Residential Roofing",
+                "text": "Residential Roofing"
+              },
+              {
+                "value": "Solar Panel Installation",
+                "text": "Solar Panel Installation"
+              },
+              {
+                "value": "Holiday Light Installation",
+                "text": "Holiday Light Installation"
+              },
+              {
+                "value": "Commercial Roofing",
+                "text": "Commercial Roofing"
+              },
+              {
+                "value": "Waterproofing",
+                "text": "Waterproofing"
+              },
+              {
+                "value": "Gutter Installation",
+                "text": "Gutter Installation"
+              },
+              {
+                "value": "Roof Repair",
+                "text": "Roof Repair"
+              },
+              {
+                "value": "Roof Installation / Roof Replacement",
+                "text": "Roof Installation / Roof Replacement"
+              }
+            ]
+          },
+          {
+            "id": "form-field-message",
+            "name": "form_fields[message]",
+            "type": "textarea",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Message",
+            "options": []
+          },
+          {
+            "id": "field-10",
+            "name": "",
+            "type": "submit",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          }
+        ],
+        "accessibility": {
+          "score": 53,
+          "maxScore": 100,
+          "issues": [
+            "Form missing action URL for submission",
+            "CAPTCHA present - prevents AI form submission"
+          ],
+          "recommendations": [
+            "STRUCTURAL: Missing action attribute - AI agents need submission endpoint",
+            "INPUTHINTS: No autocomplete attributes found - helpful for AI data entry",
+            "VALIDATION: No error message containers found",
+            "SUBMISSION: CAPTCHA detected - major blocker for AI agents, No CSRF token found - may cause submission failures",
+            "Form requires significant improvements for AI agent compatibility",
+            "CRITICAL: Remove or provide alternatives to CAPTCHA for AI agents"
+          ],
+          "categories": {
+            "structural": {
+              "score": 12,
+              "maxScore": 15,
+              "issues": [
+                "Missing action attribute - AI agents need submission endpoint"
+              ]
+            },
+            "identification": {
+              "score": 20,
+              "maxScore": 20,
+              "issues": []
+            },
+            "labeling": {
+              "score": 8,
+              "maxScore": 15,
+              "issues": []
+            },
+            "inputHints": {
+              "score": 1,
+              "maxScore": 10,
+              "issues": [
+                "No autocomplete attributes found - helpful for AI data entry"
+              ]
+            },
+            "dataTypes": {
+              "score": 6,
+              "maxScore": 15,
+              "issues": []
+            },
+            "validation": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "No error message containers found"
+              ]
+            },
+            "submission": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "CAPTCHA detected - major blocker for AI agents",
+                "No CSRF token found - may cause submission failures"
+              ]
+            },
+            "accessibility": {
+              "score": 0,
+              "maxScore": 5,
+              "issues": []
+            }
+          },
+          "aiAccessibility": {
+            "hasLabels": true,
+            "hasAriaLabels": false,
+            "hasNameAttributes": true,
+            "hasValidation": true,
+            "hasCaptcha": true,
+            "hasFileUpload": false,
+            "hasProperStructure": true,
+            "hasAutocomplete": false,
+            "hasDataTypes": true
+          },
+          "fieldAnalysis": []
+        },
+        "analyzedAt": "2025-08-11T18:58:48.131Z",
+        "globalFormIndex": 9
+      },
+      {
+        "formId": "form-0",
+        "url": "https://acme-roofing.example/services/residential-roofing/",
+        "pageTitle": "Page 7",
+        "characteristics": {
+          "hasCaptcha": true,
+          "hasFileUpload": false,
+          "hasMultiStep": false,
+          "hasValidation": true,
+          "isLoginForm": false,
+          "isContactForm": true,
+          "isSearchForm": true
+        },
+        "fields": [
+          {
+            "id": "field-0",
+            "name": "post_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "535",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-1",
+            "name": "form_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "d730d34",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-2",
+            "name": "referer_title",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "Residential Roofing | acme-roofing.example",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-3",
+            "name": "queried_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "535",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "form-field-address",
+            "name": "form_fields[address]",
+            "type": "text",
+            "placeholder": "Enter Your Address",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Address",
+            "options": []
+          },
+          {
+            "id": "form-field-name",
+            "name": "form_fields[name]",
+            "type": "text",
+            "placeholder": "Full Name",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Name",
+            "options": []
+          },
+          {
+            "id": "form-field-field_e42fbeb",
+            "name": "form_fields[field_e42fbeb]",
+            "type": "email",
+            "placeholder": "Email Address",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Email",
+            "options": []
+          },
+          {
+            "id": "form-field-phone",
+            "name": "form_fields[phone]",
+            "type": "tel",
+            "placeholder": "+1",
+            "required": true,
+            "disabled": false,
+            "value": "+1",
+            "ariaLabel": "",
+            "label": "Phone\t\t\t\t\t\t\t\n\t\t\t\t\t\t\t\tPhone",
+            "options": []
+          },
+          {
+            "id": "field-8",
+            "name": "",
+            "type": "submit",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          }
+        ],
+        "accessibility": {
+          "score": 57,
+          "maxScore": 100,
+          "issues": [
+            "Form missing action URL for submission",
+            "CAPTCHA present - prevents AI form submission"
+          ],
+          "recommendations": [
+            "STRUCTURAL: Missing action attribute - AI agents need submission endpoint",
+            "INPUTHINTS: No autocomplete attributes found - helpful for AI data entry",
+            "VALIDATION: No error message containers found",
+            "SUBMISSION: CAPTCHA detected - major blocker for AI agents, No CSRF token found - may cause submission failures",
+            "Form requires significant improvements for AI agent compatibility",
+            "CRITICAL: Remove or provide alternatives to CAPTCHA for AI agents"
+          ],
+          "categories": {
+            "structural": {
+              "score": 12,
+              "maxScore": 15,
+              "issues": [
+                "Missing action attribute - AI agents need submission endpoint"
+              ]
+            },
+            "identification": {
+              "score": 20,
+              "maxScore": 20,
+              "issues": []
+            },
+            "labeling": {
+              "score": 8,
+              "maxScore": 15,
+              "issues": []
+            },
+            "inputHints": {
+              "score": 4,
+              "maxScore": 10,
+              "issues": [
+                "No autocomplete attributes found - helpful for AI data entry"
+              ]
+            },
+            "dataTypes": {
+              "score": 7,
+              "maxScore": 15,
+              "issues": []
+            },
+            "validation": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "No error message containers found"
+              ]
+            },
+            "submission": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "CAPTCHA detected - major blocker for AI agents",
+                "No CSRF token found - may cause submission failures"
+              ]
+            },
+            "accessibility": {
+              "score": 0,
+              "maxScore": 5,
+              "issues": []
+            }
+          },
+          "aiAccessibility": {
+            "hasLabels": true,
+            "hasAriaLabels": false,
+            "hasNameAttributes": true,
+            "hasValidation": true,
+            "hasCaptcha": true,
+            "hasFileUpload": false,
+            "hasProperStructure": true,
+            "hasAutocomplete": false,
+            "hasDataTypes": true
+          },
+          "fieldAnalysis": []
+        },
+        "analyzedAt": "2025-08-11T18:58:48.439Z",
+        "globalFormIndex": 10
+      },
+      {
+        "formId": "form-1",
+        "url": "https://acme-roofing.example/services/residential-roofing/",
+        "pageTitle": "Page 7",
+        "characteristics": {
+          "hasCaptcha": true,
+          "hasFileUpload": false,
+          "hasMultiStep": false,
+          "hasValidation": true,
+          "isLoginForm": false,
+          "isContactForm": true,
+          "isSearchForm": true
+        },
+        "fields": [
+          {
+            "id": "field-0",
+            "name": "post_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "115",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-1",
+            "name": "form_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "48758b9",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-2",
+            "name": "referer_title",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "Residential Roofing | acme-roofing.example",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-3",
+            "name": "queried_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "535",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "form-field-field_0cb03e5",
+            "name": "form_fields[field_0cb03e5]",
+            "type": "text",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Full Name",
+            "options": []
+          },
+          {
+            "id": "form-field-formAddress",
+            "name": "form_fields[formAddress]",
+            "type": "text",
+            "placeholder": "Enter Property Address",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Address",
+            "options": []
+          },
+          {
+            "id": "form-field-email",
+            "name": "form_fields[email]",
+            "type": "email",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Email",
+            "options": []
+          },
+          {
+            "id": "form-field-phone",
+            "name": "form_fields[phone]",
+            "type": "tel",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "+1",
+            "ariaLabel": "",
+            "label": "Phone\t\t\t\t\t\t\t\n\t\t\t\t\t\t\t\tPhone",
+            "options": []
+          },
+          {
+            "id": "form-field-field_6ae8d6b",
+            "name": "form_fields[field_6ae8d6b]",
+            "type": "select",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Choose Service*",
+            "options": [
+              {
+                "value": "",
+                "text": "- Choose Service -"
+              },
+              {
+                "value": "Residential Roofing",
+                "text": "Residential Roofing"
+              },
+              {
+                "value": "Solar Panel Installation",
+                "text": "Solar Panel Installation"
+              },
+              {
+                "value": "Holiday Light Installation",
+                "text": "Holiday Light Installation"
+              },
+              {
+                "value": "Commercial Roofing",
+                "text": "Commercial Roofing"
+              },
+              {
+                "value": "Waterproofing",
+                "text": "Waterproofing"
+              },
+              {
+                "value": "Gutter Installation",
+                "text": "Gutter Installation"
+              },
+              {
+                "value": "Roof Repair",
+                "text": "Roof Repair"
+              },
+              {
+                "value": "Roof Installation / Roof Replacement",
+                "text": "Roof Installation / Roof Replacement"
+              }
+            ]
+          },
+          {
+            "id": "form-field-message",
+            "name": "form_fields[message]",
+            "type": "textarea",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Message",
+            "options": []
+          },
+          {
+            "id": "field-10",
+            "name": "",
+            "type": "submit",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          }
+        ],
+        "accessibility": {
+          "score": 53,
+          "maxScore": 100,
+          "issues": [
+            "Form missing action URL for submission",
+            "CAPTCHA present - prevents AI form submission"
+          ],
+          "recommendations": [
+            "STRUCTURAL: Missing action attribute - AI agents need submission endpoint",
+            "INPUTHINTS: No autocomplete attributes found - helpful for AI data entry",
+            "VALIDATION: No error message containers found",
+            "SUBMISSION: CAPTCHA detected - major blocker for AI agents, No CSRF token found - may cause submission failures",
+            "Form requires significant improvements for AI agent compatibility",
+            "CRITICAL: Remove or provide alternatives to CAPTCHA for AI agents"
+          ],
+          "categories": {
+            "structural": {
+              "score": 12,
+              "maxScore": 15,
+              "issues": [
+                "Missing action attribute - AI agents need submission endpoint"
+              ]
+            },
+            "identification": {
+              "score": 20,
+              "maxScore": 20,
+              "issues": []
+            },
+            "labeling": {
+              "score": 8,
+              "maxScore": 15,
+              "issues": []
+            },
+            "inputHints": {
+              "score": 1,
+              "maxScore": 10,
+              "issues": [
+                "No autocomplete attributes found - helpful for AI data entry"
+              ]
+            },
+            "dataTypes": {
+              "score": 6,
+              "maxScore": 15,
+              "issues": []
+            },
+            "validation": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "No error message containers found"
+              ]
+            },
+            "submission": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "CAPTCHA detected - major blocker for AI agents",
+                "No CSRF token found - may cause submission failures"
+              ]
+            },
+            "accessibility": {
+              "score": 0,
+              "maxScore": 5,
+              "issues": []
+            }
+          },
+          "aiAccessibility": {
+            "hasLabels": true,
+            "hasAriaLabels": false,
+            "hasNameAttributes": true,
+            "hasValidation": true,
+            "hasCaptcha": true,
+            "hasFileUpload": false,
+            "hasProperStructure": true,
+            "hasAutocomplete": false,
+            "hasDataTypes": true
+          },
+          "fieldAnalysis": []
+        },
+        "analyzedAt": "2025-08-11T18:58:48.744Z",
+        "globalFormIndex": 11
+      },
+      {
+        "formId": "form-0",
+        "url": "https://acme-roofing.example/services/commercial-roofing/",
+        "pageTitle": "Page 8",
+        "characteristics": {
+          "hasCaptcha": true,
+          "hasFileUpload": false,
+          "hasMultiStep": false,
+          "hasValidation": true,
+          "isLoginForm": false,
+          "isContactForm": true,
+          "isSearchForm": true
+        },
+        "fields": [
+          {
+            "id": "field-0",
+            "name": "post_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "1148",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-1",
+            "name": "form_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "0f184aa",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-2",
+            "name": "referer_title",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "Commercial Roofing & Industrial Roofing | acme-roofing.example",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-3",
+            "name": "queried_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "1148",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "form-field-address",
+            "name": "form_fields[address]",
+            "type": "text",
+            "placeholder": "Enter Your Address",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Address",
+            "options": []
+          },
+          {
+            "id": "form-field-name",
+            "name": "form_fields[name]",
+            "type": "text",
+            "placeholder": "Full Name",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Name",
+            "options": []
+          },
+          {
+            "id": "form-field-field_e42fbeb",
+            "name": "form_fields[field_e42fbeb]",
+            "type": "email",
+            "placeholder": "Email Address",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Email",
+            "options": []
+          },
+          {
+            "id": "form-field-phone",
+            "name": "form_fields[phone]",
+            "type": "tel",
+            "placeholder": "+1",
+            "required": true,
+            "disabled": false,
+            "value": "+1",
+            "ariaLabel": "",
+            "label": "Phone\t\t\t\t\t\t\t\n\t\t\t\t\t\t\t\tPhone",
+            "options": []
+          },
+          {
+            "id": "field-8",
+            "name": "",
+            "type": "submit",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          }
+        ],
+        "accessibility": {
+          "score": 57,
+          "maxScore": 100,
+          "issues": [
+            "Form missing action URL for submission",
+            "CAPTCHA present - prevents AI form submission"
+          ],
+          "recommendations": [
+            "STRUCTURAL: Missing action attribute - AI agents need submission endpoint",
+            "INPUTHINTS: No autocomplete attributes found - helpful for AI data entry",
+            "VALIDATION: No error message containers found",
+            "SUBMISSION: CAPTCHA detected - major blocker for AI agents, No CSRF token found - may cause submission failures",
+            "Form requires significant improvements for AI agent compatibility",
+            "CRITICAL: Remove or provide alternatives to CAPTCHA for AI agents"
+          ],
+          "categories": {
+            "structural": {
+              "score": 12,
+              "maxScore": 15,
+              "issues": [
+                "Missing action attribute - AI agents need submission endpoint"
+              ]
+            },
+            "identification": {
+              "score": 20,
+              "maxScore": 20,
+              "issues": []
+            },
+            "labeling": {
+              "score": 8,
+              "maxScore": 15,
+              "issues": []
+            },
+            "inputHints": {
+              "score": 4,
+              "maxScore": 10,
+              "issues": [
+                "No autocomplete attributes found - helpful for AI data entry"
+              ]
+            },
+            "dataTypes": {
+              "score": 7,
+              "maxScore": 15,
+              "issues": []
+            },
+            "validation": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "No error message containers found"
+              ]
+            },
+            "submission": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "CAPTCHA detected - major blocker for AI agents",
+                "No CSRF token found - may cause submission failures"
+              ]
+            },
+            "accessibility": {
+              "score": 0,
+              "maxScore": 5,
+              "issues": []
+            }
+          },
+          "aiAccessibility": {
+            "hasLabels": true,
+            "hasAriaLabels": false,
+            "hasNameAttributes": true,
+            "hasValidation": true,
+            "hasCaptcha": true,
+            "hasFileUpload": false,
+            "hasProperStructure": true,
+            "hasAutocomplete": false,
+            "hasDataTypes": true
+          },
+          "fieldAnalysis": []
+        },
+        "analyzedAt": "2025-08-11T18:58:49.050Z",
+        "globalFormIndex": 12
+      },
+      {
+        "formId": "form-1",
+        "url": "https://acme-roofing.example/services/commercial-roofing/",
+        "pageTitle": "Page 8",
+        "characteristics": {
+          "hasCaptcha": true,
+          "hasFileUpload": false,
+          "hasMultiStep": false,
+          "hasValidation": true,
+          "isLoginForm": false,
+          "isContactForm": true,
+          "isSearchForm": true
+        },
+        "fields": [
+          {
+            "id": "field-0",
+            "name": "post_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "115",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-1",
+            "name": "form_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "48758b9",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-2",
+            "name": "referer_title",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "Commercial Roofing & Industrial Roofing | acme-roofing.example",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "field-3",
+            "name": "queried_id",
+            "type": "hidden",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "1148",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          },
+          {
+            "id": "form-field-field_0cb03e5",
+            "name": "form_fields[field_0cb03e5]",
+            "type": "text",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Full Name",
+            "options": []
+          },
+          {
+            "id": "form-field-formAddress",
+            "name": "form_fields[formAddress]",
+            "type": "text",
+            "placeholder": "Enter Property Address",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Address",
+            "options": []
+          },
+          {
+            "id": "form-field-email",
+            "name": "form_fields[email]",
+            "type": "email",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Email",
+            "options": []
+          },
+          {
+            "id": "form-field-phone",
+            "name": "form_fields[phone]",
+            "type": "tel",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "+1",
+            "ariaLabel": "",
+            "label": "Phone\t\t\t\t\t\t\t\n\t\t\t\t\t\t\t\tPhone",
+            "options": []
+          },
+          {
+            "id": "form-field-field_6ae8d6b",
+            "name": "form_fields[field_6ae8d6b]",
+            "type": "select",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Choose Service*",
+            "options": [
+              {
+                "value": "",
+                "text": "- Choose Service -"
+              },
+              {
+                "value": "Residential Roofing",
+                "text": "Residential Roofing"
+              },
+              {
+                "value": "Solar Panel Installation",
+                "text": "Solar Panel Installation"
+              },
+              {
+                "value": "Holiday Light Installation",
+                "text": "Holiday Light Installation"
+              },
+              {
+                "value": "Commercial Roofing",
+                "text": "Commercial Roofing"
+              },
+              {
+                "value": "Waterproofing",
+                "text": "Waterproofing"
+              },
+              {
+                "value": "Gutter Installation",
+                "text": "Gutter Installation"
+              },
+              {
+                "value": "Roof Repair",
+                "text": "Roof Repair"
+              },
+              {
+                "value": "Roof Installation / Roof Replacement",
+                "text": "Roof Installation / Roof Replacement"
+              }
+            ]
+          },
+          {
+            "id": "form-field-message",
+            "name": "form_fields[message]",
+            "type": "textarea",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Message",
+            "options": []
+          },
+          {
+            "id": "field-10",
+            "name": "",
+            "type": "submit",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          }
+        ],
+        "accessibility": {
+          "score": 53,
+          "maxScore": 100,
+          "issues": [
+            "Form missing action URL for submission",
+            "CAPTCHA present - prevents AI form submission"
+          ],
+          "recommendations": [
+            "STRUCTURAL: Missing action attribute - AI agents need submission endpoint",
+            "INPUTHINTS: No autocomplete attributes found - helpful for AI data entry",
+            "VALIDATION: No error message containers found",
+            "SUBMISSION: CAPTCHA detected - major blocker for AI agents, No CSRF token found - may cause submission failures",
+            "Form requires significant improvements for AI agent compatibility",
+            "CRITICAL: Remove or provide alternatives to CAPTCHA for AI agents"
+          ],
+          "categories": {
+            "structural": {
+              "score": 12,
+              "maxScore": 15,
+              "issues": [
+                "Missing action attribute - AI agents need submission endpoint"
+              ]
+            },
+            "identification": {
+              "score": 20,
+              "maxScore": 20,
+              "issues": []
+            },
+            "labeling": {
+              "score": 8,
+              "maxScore": 15,
+              "issues": []
+            },
+            "inputHints": {
+              "score": 1,
+              "maxScore": 10,
+              "issues": [
+                "No autocomplete attributes found - helpful for AI data entry"
+              ]
+            },
+            "dataTypes": {
+              "score": 6,
+              "maxScore": 15,
+              "issues": []
+            },
+            "validation": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "No error message containers found"
+              ]
+            },
+            "submission": {
+              "score": 3,
+              "maxScore": 10,
+              "issues": [
+                "CAPTCHA detected - major blocker for AI agents",
+                "No CSRF token found - may cause submission failures"
+              ]
+            },
+            "accessibility": {
+              "score": 0,
+              "maxScore": 5,
+              "issues": []
+            }
+          },
+          "aiAccessibility": {
+            "hasLabels": true,
+            "hasAriaLabels": false,
+            "hasNameAttributes": true,
+            "hasValidation": true,
+            "hasCaptcha": true,
+            "hasFileUpload": false,
+            "hasProperStructure": true,
+            "hasAutocomplete": false,
+            "hasDataTypes": true
+          },
+          "fieldAnalysis": []
+        },
+        "analyzedAt": "2025-08-11T18:58:49.357Z",
+        "globalFormIndex": 13
+      }
+    ],
+    "aiSummary": "Full website crawl completed. Discovered 24 pages, scanned 24 pages, and analyzed 14 forms with an average AI compatibility score of 53/100.",
+    "scanMode": "full-crawl",
+    "targetUrl": "https://acme-roofing.example/",
+    "crawlInfo": {
+      "pagesDiscovered": 24,
+      "pagesScanned": 24,
+      "formsFound": 14
+    }
+  },
+  "error": null,
+  "formsAnalyzed": 14,
+  "formsFound": 14,
+  "timestamp": "2025-08-11T18:58:49.659Z",
+  "iteration": 0,
+  "maxIterations": 5,
+  "jobId": "8b77b900-21c9-424f-b014-22c655394913",
+  "type": "form_analyzed",
+  "formsCount": 14,
+  "pagesWithForms": [
+    {
+      "url": "https://acme-roofing.example/",
+      "formsCount": 3,
+      "pageIndex": 0
+    },
+    {
+      "url": "https://acme-roofing.example/services/",
+      "formsCount": 1,
+      "pageIndex": 2
+    },
+    {
+      "url": "https://acme-roofing.example/services/roof-replacement/",
+      "formsCount": 2,
+      "pageIndex": 3
+    },
+    {
+      "url": "https://acme-roofing.example/services/roof-inspection/",
+      "formsCount": 2,
+      "pageIndex": 4
+    },
+    {
+      "url": "https://acme-roofing.example/services/roof-insurance-claim/",
+      "formsCount": 2,
+      "pageIndex": 5
+    },
+    {
+      "url": "https://acme-roofing.example/services/residential-roofing/",
+      "formsCount": 2,
+      "pageIndex": 6
+    },
+    {
+      "url": "https://acme-roofing.example/services/commercial-roofing/",
+      "formsCount": 2,
+      "pageIndex": 7
+    }
+  ],
+  "totalPagesScanned": 24,
+  "formData": {
+    "formIndex": 14,
+    "totalForms": 14,
+    "formId": "form-1",
+    "pageUrl": "https://acme-roofing.example/services/commercial-roofing/",
+    "score": 53,
+    "maxScore": 100
+  }
+}
