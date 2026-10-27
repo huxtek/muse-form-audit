@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type SyntheticEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type SyntheticEvent } from "react";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle, FlaskConical, ImageOff } from "lucide-react";
 import { getScreenshotUrl } from "@/lib/api-config";
@@ -20,12 +20,25 @@ const NARROW_BOX = 44;
 export const FormVisualOverlay = ({
   form,
   jobId,
-  showSeverityCounts = true
+  showSeverityCounts = true,
+  hoveredField = null,
+  pinnedField = null,
+  onHoverField,
+  onPinField
 }: FormVisualOverlayProps) => {
   const visual = form.visual;
   const fieldIssues = form.accessibility?.fieldIssues ?? [];
   const [imageState, setImageState] = useState<"loading" | "ready" | "error">("loading");
-  const [activeField, setActiveField] = useState<string | null>(null);
+  /**
+   * Usable both ways: a parent that wants the image and a findings list in
+   * step passes selection down, and anything rendering the overlay on its own
+   * still gets working hover and pin behaviour.
+   */
+  const isControlled = onHoverField !== undefined || onPinField !== undefined;
+  const [ownHoveredField, setOwnHoveredField] = useState<string | null>(null);
+  const [ownPinnedField, setOwnPinnedField] = useState<string | null>(null);
+  const activeHover = isControlled ? hoveredField : ownHoveredField;
+  const activePin = isControlled ? pinnedField : ownPinnedField;
   /**
    * The decoded image's own dimensions, read on load.
    *
@@ -43,8 +56,9 @@ export const FormVisualOverlay = ({
     if (lastKey.current !== key) {
       lastKey.current = key;
       setImageState("loading");
-      setActiveField(null);
       setNaturalSize(null);
+      setOwnHoveredField(null);
+      setOwnPinnedField(null);
     }
   }, [jobId, visual?.visualIndex]);
 
@@ -112,15 +126,16 @@ export const FormVisualOverlay = ({
   function renderHighlight(entry: HighlightEntry) {
     const { field, severity, issues } = entry;
     const style = SEVERITY_STYLES[severity];
-    const isActive = activeField === entry.key;
+    const isPinned = activePin === entry.identifier;
+    const isActive = isPinned || activeHover === entry.identifier;
     const narrow = field.rect.width < NARROW_BOX;
 
     return (
       <div key={entry.key} {...getHighlightProps(entry)}>
         <div
-          className={`absolute inset-0 rounded-sm border-2 ${style.border} ${style.fill} ${
-            isActive ? "ring-2 ring-offset-1 ring-foreground/40" : ""
-          }`}
+          className={`absolute inset-0 rounded-sm border-2 transition-shadow ${style.border} ${style.fill} ${
+            isActive ? "ring-2 ring-offset-1 ring-foreground/50" : ""
+          } ${isPinned ? "shadow-lg" : ""}`}
         />
 
         {/* Checkboxes and radios are too small to hold the badge, and their
@@ -193,7 +208,7 @@ export const FormVisualOverlay = ({
     return (
       <div className="space-y-2">
         <p className="text-xs text-muted-foreground">
-          Hover a highlight to read its findings.
+          Hover a highlight to read its findings, or click to keep it open.
           {visual?.truncated ? " The form was taller than the capture limit, so the image is cropped." : ""}
         </p>
 
@@ -228,7 +243,7 @@ export const FormVisualOverlay = ({
     const height = naturalSize?.height || visual?.height || 1;
 
     return {
-      className: "absolute group cursor-help",
+      className: "absolute group cursor-pointer",
       style: {
         left: `${(rect.x / width) * 100}%`,
         top: `${(rect.y / height) * 100}%`,
@@ -238,10 +253,19 @@ export const FormVisualOverlay = ({
       tabIndex: 0,
       role: "button",
       "aria-label": `${entry.issues.length} finding${entry.issues.length === 1 ? "" : "s"} on ${entry.label}`,
-      onMouseEnter: () => handleActivate(entry.key),
-      onMouseLeave: handleDeactivate,
-      onFocus: () => handleActivate(entry.key),
-      onBlur: handleDeactivate
+      "aria-pressed": activePin === entry.identifier,
+      onMouseEnter: () => handleHover(entry.identifier),
+      onMouseLeave: () => handleHover(null),
+      onFocus: () => handleHover(entry.identifier),
+      onBlur: () => handleHover(null),
+      onClick: () => handlePin(entry.identifier),
+      // A div with role=button does not get Enter/Space for free.
+      onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          handlePin(entry.identifier);
+        }
+      }
     };
   }
 
@@ -259,12 +283,27 @@ export const FormVisualOverlay = ({
     setImageState("error");
   }
 
-  function handleActivate(key: string) {
-    setActiveField(key);
+  function handleHover(identifier: string | null) {
+    if (isControlled) {
+      onHoverField?.(identifier);
+
+      return;
+    }
+
+    setOwnHoveredField(identifier);
   }
 
-  function handleDeactivate() {
-    setActiveField(null);
+  /** Clicking toggles a pin, so a finding can be read without holding hover. */
+  function handlePin(identifier: string) {
+    const next = activePin === identifier ? null : identifier;
+
+    if (isControlled) {
+      onPinField?.(next);
+
+      return;
+    }
+
+    setOwnPinnedField(next);
   }
 
   /** Pairs each renderable control with the findings attributed to it. */
@@ -296,6 +335,9 @@ export const FormVisualOverlay = ({
 
       entries.push({
         key: `${identifier}-${index}`,
+        // Lowercased name/id. The shared selection key between the image and
+        // the findings list, which only knows field names.
+        identifier,
         label: field.name || field.id,
         field,
         issues,
@@ -344,10 +386,20 @@ interface FormVisualOverlayProps {
    * already shows the same numbers for a single form.
    */
   showSeverityCounts?: boolean;
+  /**
+   * Selection is controlled by the parent so the image and the findings list
+   * stay in step. `hoveredField` is transient; `pinnedField` survives until
+   * it is toggled off.
+   */
+  hoveredField?: string | null;
+  pinnedField?: string | null;
+  onHoverField?: (identifier: string | null) => void;
+  onPinField?: (identifier: string | null) => void;
 }
 
 interface HighlightEntry {
   key: string;
+  identifier: string;
   label: string;
   field: VisualField;
   issues: FieldIssue[];

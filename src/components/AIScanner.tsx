@@ -24,7 +24,7 @@ import { SEVERITY_ORDER, SEVERITY_STYLES } from "@/defines/severities";
 import type { IssueSeverity } from "@/lib/scan-types";
 import { PerformanceDashboard } from "@/components/PerformanceDashboard";
 import FormAnalysisDisplay from "@/components/FormAnalysisDisplay";
-import FormVisualOverlay from "@/components/FormVisualOverlay";
+import FormVisualPanel from "@/components/FormVisualPanel";
 import PageMapView from "@/components/PageMapView";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -451,7 +451,10 @@ export const AIScanner = () => {
         )}
       </div>
 
-      <FormVisualOverlay
+      {/* Keyed by form identity so switching forms resets the pinned
+          selection without the panel clearing state in an effect. */}
+      <FormVisualPanel
+        key={`panel-${form.formId || 'form'}-${form.visual?.visualIndex ?? index}`}
         form={form}
         jobId={currentJob?.id ?? ''}
         showSeverityCounts={(currentJob?.results?.forms?.length ?? 0) > 1}
