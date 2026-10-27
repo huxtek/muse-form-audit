@@ -24,7 +24,13 @@ export const VISUAL_LIMITS = {
   maxForms: Number(process.env.VISUAL_MAX_FORMS || 15),
   maxFormHeight: Number(process.env.VISUAL_MAX_FORM_HEIGHT || 4000),
   maxFormWidth: Number(process.env.VISUAL_MAX_FORM_WIDTH || 2000),
-  minFormSize: 8
+  minFormSize: 8,
+  /**
+   * Breathing room captured around the form. A form's bounding box starts at
+   * its first label, so without this the content sits flush against the frame
+   * and a rounded corner clips it.
+   */
+  padding: Number(process.env.VISUAL_CAPTURE_PADDING || 16)
 };
 
 /**
@@ -32,11 +38,18 @@ export const VISUAL_LIMITS = {
  * Exported for testing against a fake page object.
  */
 export async function readFormGeometry(page, limits = VISUAL_LIMITS) {
-  return page.evaluate(
+  const result = await page.evaluate(
     (fieldSelector, maxForms, minSize) => {
       const forms = Array.from(document.querySelectorAll('form')).slice(0, maxForms);
 
-      return forms.map((form, formIndex) => {
+      // Page extent, so padding around a form can be clamped to what actually
+      // exists rather than asking for a clip outside the document.
+      const pageSize = {
+        width: Math.max(document.documentElement.scrollWidth, window.innerWidth),
+        height: Math.max(document.documentElement.scrollHeight, window.innerHeight)
+      };
+
+      const measured = forms.map((form, formIndex) => {
         const formRect = form.getBoundingClientRect();
         // getBoundingClientRect is viewport-relative; make it page-absolute.
         const pageX = formRect.left + window.scrollX;
@@ -88,11 +101,44 @@ export async function readFormGeometry(page, limits = VISUAL_LIMITS) {
           fields
         };
       });
+
+      return { pageSize, forms: measured };
     },
     FIELD_SELECTOR,
     limits.maxForms,
     limits.minFormSize
   );
+
+  // Tolerate an older/odd return shape rather than throwing on a page quirk.
+  if (Array.isArray(result)) {
+    return { pageSize: { width: 0, height: 0 }, forms: result };
+  }
+
+  return {
+    pageSize: result?.pageSize ?? { width: 0, height: 0 },
+    forms: Array.isArray(result?.forms) ? result.forms : []
+  };
+}
+
+/**
+ * Padding actually available on each side of a form, given where it sits in
+ * the page. Asking for 16px on the left of a form at x=4 would produce a
+ * negative clip, so each side is clamped independently and the applied values
+ * are returned -- field coordinates must shift by exactly what was applied.
+ */
+export function resolvePadding(formRect, pageSize, requested) {
+  const padLeft = Math.min(requested, Math.max(0, formRect.x));
+  const padTop = Math.min(requested, Math.max(0, formRect.y));
+
+  const rightRoom = pageSize?.width ? pageSize.width - (formRect.x + formRect.width) : requested;
+  const bottomRoom = pageSize?.height ? pageSize.height - (formRect.y + formRect.height) : requested;
+
+  return {
+    padLeft,
+    padTop,
+    padRight: Math.min(requested, Math.max(0, rightRoom)),
+    padBottom: Math.min(requested, Math.max(0, bottomRoom))
+  };
 }
 
 /**
@@ -114,7 +160,7 @@ export async function captureFormVisuals(page, { limits = VISUAL_LIMITS, logger 
 
   const visuals = [];
 
-  for (const form of geometry) {
+  for (const form of geometry.forms) {
     const base = {
       formIndex: form.formIndex,
       signature: form.signature,
@@ -128,17 +174,26 @@ export async function captureFormVisuals(page, { limits = VISUAL_LIMITS, logger 
       continue;
     }
 
+    const { padLeft, padTop, padRight, padBottom } = resolvePadding(
+      form.rect,
+      geometry.pageSize,
+      limits.padding
+    );
+
+    const desiredWidth = form.rect.width + padLeft + padRight;
+    const desiredHeight = form.rect.height + padTop + padBottom;
+
     // Clamp the crop: a very tall form would otherwise produce a huge PNG.
-    const width = Math.min(form.rect.width, limits.maxFormWidth);
-    const height = Math.min(form.rect.height, limits.maxFormHeight);
-    const truncated = height < form.rect.height || width < form.rect.width;
+    const width = Math.min(desiredWidth, limits.maxFormWidth);
+    const height = Math.min(desiredHeight, limits.maxFormHeight);
+    const truncated = width < desiredWidth || height < desiredHeight;
 
     try {
       const buffer = await page.screenshot({
         type: 'png',
         clip: {
-          x: Math.max(0, form.rect.x),
-          y: Math.max(0, form.rect.y),
+          x: Math.max(0, form.rect.x - padLeft),
+          y: Math.max(0, form.rect.y - padTop),
           width,
           height
         },
@@ -147,8 +202,19 @@ export async function captureFormVisuals(page, { limits = VISUAL_LIMITS, logger 
 
       visuals.push({
         ...base,
+        // Field rects were measured from the form's own origin; the capture now
+        // starts `pad` earlier, so every box shifts by the applied padding.
+        fields: form.fields.map((field) => ({
+          ...field,
+          rect: {
+            ...field.rect,
+            x: field.rect.x + padLeft,
+            y: field.rect.y + padTop
+          }
+        })),
+        padding: { left: padLeft, top: padTop, right: padRight, bottom: padBottom },
         // The capture is what the client scales against, which may be the
-        // clamped size rather than the form's full size.
+        // clamped size rather than the padded size.
         width,
         height,
         truncated,
