@@ -21,6 +21,33 @@ export const SAMPLE_FORM_IMAGE = readFileSync(
 export const SAMPLE_FORM_WIDTH = 680;
 export const SAMPLE_FORM_HEIGHT = 420;
 
+/**
+ * The sample whole-page map, with three form slots. PNG rather than JPEG:
+ * real captures are JPEG because a full page is megabytes losslessly, but this
+ * wireframe is 11 kB either way.
+ */
+export const SAMPLE_PAGE_IMAGE = readFileSync(
+  path.join(__dirname, '..', '..', 'mock-data', 'sample-page.png')
+);
+
+export const SAMPLE_PAGE_WIDTH = 1000;
+export const SAMPLE_PAGE_HEIGHT = 1320;
+
+/** Forms per sample page, so a mock crawl spreads across several maps. */
+export const SAMPLE_FORMS_PER_PAGE = 3;
+
+/**
+ * Slot rectangles, matching the generated image. The last slot runs off the
+ * bottom of the page, so its height is clamped -- a region that overflowed the
+ * image would draw outside the frame.
+ */
+export const SAMPLE_PAGE_SLOTS = [240, 700, 1160].map((y) => ({
+  x: 160,
+  y,
+  width: SAMPLE_FORM_WIDTH,
+  height: Math.min(SAMPLE_FORM_HEIGHT, SAMPLE_PAGE_HEIGHT - y)
+}));
+
 const field = (name, type, tagName, x, y, width, height) => ({
   name,
   id: '',
@@ -78,8 +105,18 @@ export const SAMPLE_FIELD_ISSUES = [
   }
 ];
 
-/** Visual metadata for one mock form, matching the bundled image. */
+/** Which sample page a mock form sits on, and where on it. */
+export function samplePagePlacement(visualIndex) {
+  const pageIndex = Math.floor(visualIndex / SAMPLE_FORMS_PER_PAGE);
+  const slot = visualIndex % SAMPLE_FORMS_PER_PAGE;
+
+  return { pageIndex, pageRect: SAMPLE_PAGE_SLOTS[slot] };
+}
+
+/** Visual metadata for one mock form, matching the bundled images. */
 export function sampleFormVisual(visualIndex) {
+  const { pageIndex, pageRect } = samplePagePlacement(visualIndex);
+
   return {
     formIndex: visualIndex,
     visualIndex,
@@ -90,6 +127,13 @@ export function sampleFormVisual(visualIndex) {
     truncated: false,
     fields: SAMPLE_FORM_FIELDS,
     hasScreenshot: true,
-    isSample: true
+    isSample: true,
+    pageRect,
+    pageMap: {
+      pageIndex,
+      width: SAMPLE_PAGE_WIDTH,
+      height: SAMPLE_PAGE_HEIGHT,
+      truncated: false
+    }
   };
 }

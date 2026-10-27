@@ -23,6 +23,7 @@ export const API_CONFIG = {
     REPORT: '/api/report',
     JOBS: '/api/jobs',
     SCREENSHOT: '/api/screenshot',
+    PAGE_MAP: '/api/page-map',
     HEALTH: '/health'
   }
 };
@@ -37,3 +38,7 @@ export const getWebSocketUrl = (): string => {
  */
 export const getScreenshotUrl = (jobId: string, visualIndex: number): string =>
   `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SCREENSHOT}/${encodeURIComponent(jobId)}/${visualIndex}`;
+
+/** URL of the whole-page map for one scanned page. */
+export const getPageMapUrl = (jobId: string, pageIndex: number): string =>
+  `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PAGE_MAP}/${encodeURIComponent(jobId)}/${pageIndex}`;

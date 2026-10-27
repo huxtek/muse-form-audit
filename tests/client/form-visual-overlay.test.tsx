@@ -46,8 +46,15 @@ const buildForm = (overrides: Partial<AnalyzedForm> = {}): AnalyzedForm => ({
   ...overrides
 });
 
-const loadImage = () => {
-  fireEvent.load(screen.getByAltText(/screenshot of form/i));
+/**
+ * jsdom never decodes images, so natural dimensions have to be stubbed before
+ * the load event. Defaults to the captured size, which is the happy path.
+ */
+const loadImage = (natural: { width: number; height: number } = CAPTURE) => {
+  const img = screen.getByAltText(/screenshot of form/i);
+  Object.defineProperty(img, 'naturalWidth', { value: natural.width, configurable: true });
+  Object.defineProperty(img, 'naturalHeight', { value: natural.height, configurable: true });
+  fireEvent.load(img);
 };
 
 const highlights = () => screen.queryAllByRole('button', { name: /finding/i });
@@ -127,6 +134,30 @@ describe('FormVisualOverlay highlight geometry', () => {
       width: '20%', // 200 / 1000
       height: '5%' // 25 / 500
     });
+  });
+
+  it('measures against the decoded image, not the reported size', () => {
+    render(<FormVisualOverlay form={buildForm()} jobId="job-abc" />);
+
+    // The server said 1000x500; the real image is half that. Positions must
+    // follow the image on screen, otherwise a clamped or changed capture
+    // silently shifts every highlight.
+    loadImage({ width: 500, height: 250 });
+
+    expect(highlights()[0]).toHaveStyle({
+      left: '20%', // 100 / 500
+      top: '20%', // 50 / 250
+      width: '40%', // 200 / 500
+      height: '10%' // 25 / 250
+    });
+  });
+
+  it('falls back to the reported size when the image reports none', () => {
+    render(<FormVisualOverlay form={buildForm()} jobId="job-abc" />);
+
+    loadImage({ width: 0, height: 0 });
+
+    expect(highlights()[0]).toHaveStyle({ left: '10%', top: '10%' });
   });
 
   it('only highlights controls that actually have findings', () => {

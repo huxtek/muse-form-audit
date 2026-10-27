@@ -25,6 +25,7 @@ import type { IssueSeverity } from "@/lib/scan-types";
 import { PerformanceDashboard } from "@/components/PerformanceDashboard";
 import FormAnalysisDisplay from "@/components/FormAnalysisDisplay";
 import FormVisualOverlay from "@/components/FormVisualOverlay";
+import PageMapView from "@/components/PageMapView";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 /** Result view tabs. Visual is the default; the written findings sit behind Details. */
@@ -368,40 +369,70 @@ export const AIScanner = () => {
       );
     }
 
+    const index = Math.min(selectedFormIndex, forms.length - 1);
+    const hasPageMap = forms.some((form) => form.visual?.pageMap);
+
+    // With a page map the map itself is the picker: the user sees the page
+    // they scanned and clicks the form they want.
+    if (hasPageMap) {
+      // The map only shows the selected form's page, so when a crawl spans
+      // several pages the map alone cannot reach every form. The numeric
+      // picker is what makes the rest reachable.
+      const pageCount = new Set(
+        forms.map((form) => form.visual?.pageMap?.pageIndex).filter((value) => value !== undefined)
+      ).size;
+
+      return (
+        <div className="space-y-5">
+          {pageCount > 1 && renderFormPicker(forms, index)}
+
+          <PageMapView
+            forms={forms}
+            jobId={currentJob?.id ?? ''}
+            selectedIndex={index}
+            onSelect={handleSelectForm}
+          />
+
+          {renderVisualForm(forms[index], index)}
+        </div>
+      );
+    }
+
     if (forms.length <= STACKED_FORM_LIMIT) {
       return <div className="space-y-8">{forms.map(renderVisualForm)}</div>;
     }
 
-    const index = Math.min(selectedFormIndex, forms.length - 1);
-
     return (
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted-foreground mr-1">
-            Form {index + 1} of {forms.length}
-          </span>
-
-          {forms.map((form, formIndex) => (
-            <button
-              key={`pick-${form.formId || 'form'}-${formIndex}`}
-              type="button"
-              aria-current={formIndex === index}
-              onClick={() => handleSelectForm(formIndex)}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
-                formIndex === index
-                  ? 'bg-sky-600 border-sky-600 text-white'
-                  : 'bg-muted/40 border-border/50 text-muted-foreground hover:bg-muted/70'
-              }`}
-            >
-              {formIndex + 1}
-            </button>
-          ))}
-        </div>
-
+        {renderFormPicker(forms, index)}
         {renderVisualForm(forms[index], index)}
       </div>
     );
   };
+
+  const renderFormPicker = (forms: ScanResults['forms'], index: number) => (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-sm text-muted-foreground mr-1">
+        Form {index + 1} of {forms.length}
+      </span>
+
+      {forms.map((form, formIndex) => (
+        <button
+          key={`pick-${form.formId || 'form'}-${formIndex}`}
+          type="button"
+          aria-current={formIndex === index}
+          onClick={() => handleSelectForm(formIndex)}
+          className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+            formIndex === index
+              ? 'bg-sky-600 border-sky-600 text-white'
+              : 'bg-muted/40 border-border/50 text-muted-foreground hover:bg-muted/70'
+          }`}
+        >
+          {formIndex + 1}
+        </button>
+      ))}
+    </div>
+  );
 
   const renderVisualForm = (form: ScanResults['forms'][number], index: number) => (
     <div key={`${form.url || 'page'}-${form.formId || 'form'}-${index}`} className="space-y-3">

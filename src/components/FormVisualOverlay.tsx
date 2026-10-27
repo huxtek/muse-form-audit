@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type SyntheticEvent } from "react";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle, FlaskConical, ImageOff } from "lucide-react";
 import { getScreenshotUrl } from "@/lib/api-config";
@@ -26,6 +26,15 @@ export const FormVisualOverlay = ({
   const fieldIssues = form.accessibility?.fieldIssues ?? [];
   const [imageState, setImageState] = useState<"loading" | "ready" | "error">("loading");
   const [activeField, setActiveField] = useState<string | null>(null);
+  /**
+   * The decoded image's own dimensions, read on load.
+   *
+   * Highlights are positioned as percentages, and the divisor has to be the
+   * size of the image actually on screen. Trusting server-reported numbers
+   * means any disagreement -- a clamped capture, a changed capture path --
+   * silently shifts every box. The browser cannot be wrong about this.
+   */
+  const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
   // Reset when the form changes, otherwise a previous form's error state sticks.
   const lastKey = useRef<string>("");
 
@@ -35,6 +44,7 @@ export const FormVisualOverlay = ({
       lastKey.current = key;
       setImageState("loading");
       setActiveField(null);
+      setNaturalSize(null);
     }
   }, [jobId, visual?.visualIndex]);
 
@@ -130,7 +140,8 @@ export const FormVisualOverlay = ({
   function renderTooltip(entry: HighlightEntry) {
     // Anchored below the box, or above it when the box sits low in the image,
     // so the tooltip stays inside the frame.
-    const below = entry.field.rect.y + entry.field.rect.height < (visual?.height ?? 0) * 0.7;
+    const frameHeight = naturalSize?.height || visual?.height || 0;
+    const below = entry.field.rect.y + entry.field.rect.height < frameHeight * 0.7;
 
     return (
       <div
@@ -211,8 +222,10 @@ export const FormVisualOverlay = ({
 
   function getHighlightProps(entry: HighlightEntry) {
     const { rect } = entry.field;
-    const width = visual?.width ?? 1;
-    const height = visual?.height ?? 1;
+    // Natural size wins; the reported size is only a fallback for the frame
+    // before the image has decoded.
+    const width = naturalSize?.width || visual?.width || 1;
+    const height = naturalSize?.height || visual?.height || 1;
 
     return {
       className: "absolute group cursor-help",
@@ -232,7 +245,13 @@ export const FormVisualOverlay = ({
     };
   }
 
-  function handleImageLoad() {
+  function handleImageLoad(event: SyntheticEvent<HTMLImageElement>) {
+    const { naturalWidth, naturalHeight } = event.currentTarget;
+
+    if (naturalWidth > 0 && naturalHeight > 0) {
+      setNaturalSize({ width: naturalWidth, height: naturalHeight });
+    }
+
     setImageState("ready");
   }
 

@@ -124,12 +124,25 @@ export interface VisualField {
  * `/api/screenshot/:jobId/:visualIndex` so polling stays small; `width` and
  * `height` describe the captured image, and every field rect is relative to it.
  */
+/** The whole-page map a form's page was captured into. */
+export interface PageMapRef {
+  pageIndex: number;
+  width: number;
+  height: number;
+  /** True when a very long page was cropped for the map. */
+  truncated?: boolean;
+}
+
 export interface FormVisual {
   visualIndex: number;
   width: number;
   height: number;
   fields: VisualField[];
   hasScreenshot: boolean;
+  /** Where the form sits on the page, in page coordinates. */
+  pageRect?: VisualFieldRect;
+  /** The page map this form can be located on. */
+  pageMap?: PageMapRef;
   /** True when the capture was clamped because the form was very large. */
   truncated?: boolean;
   /** True for the bundled Dev Mode wireframe rather than a real capture. */
