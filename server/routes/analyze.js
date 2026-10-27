@@ -2,6 +2,7 @@ import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { validateURLMiddleware, validateOptions } from '../middleware/validation.js';
 import { AIAgent } from '../agent.js';
+import { isValidProvider, resolveProviderName } from '../lib/llm/index.js';
 
 const router = express.Router();
 
@@ -98,12 +99,24 @@ router.post('/analyze', validateURLMiddleware, async (req, res) => {
       const jobId = uuidv4();
       let finalResults = null;
 
-      const agent = new AIAgent(jobId, validatedURL, false, SCAN_TIER, (update) => {
-        console.log(`Analysis progress: ${update.progress}% - ${update.currentStep}`);
-        if (update.status === 'completed' && update.results) {
-          finalResults = update.results;
-        }
-      });
+      // Untrusted input: allowlisted provider names only.
+      const providerName = resolveProviderName(
+        isValidProvider(req.body.modelProvider) ? req.body.modelProvider : undefined
+      );
+
+      const agent = new AIAgent(
+        jobId,
+        validatedURL,
+        false,
+        SCAN_TIER,
+        (update) => {
+          console.log(`Analysis progress: ${update.progress}% - ${update.currentStep}`);
+          if (update.status === 'completed' && update.results) {
+            finalResults = update.results;
+          }
+        },
+        providerName
+      );
 
       try {
         await agent.runSinglePageAnalysis();

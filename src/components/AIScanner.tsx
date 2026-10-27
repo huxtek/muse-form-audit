@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Bot, Scan, Download, ExternalLink, AlertTriangle, CheckCircle, Clock, Zap, Globe, FileText, FlaskConical } from "lucide-react";
+import { Bot, Scan, Download, ExternalLink, AlertTriangle, CheckCircle, Clock, Zap, Globe, FileText, FlaskConical, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDevMode } from "@/contexts/DevModeContext";
 import { getWebSocketUrl } from "@/lib/api-config";
@@ -14,6 +14,12 @@ import { formAPI } from "@/services/api";
 import { PDFGenerator } from "@/lib/pdf-generator";
 import { getNormalizedResults } from "@/lib/scan-results";
 import type { ScanResults } from "@/lib/scan-types";
+import {
+  DEFAULT_MODEL_PROVIDER,
+  MODEL_PROVIDERS,
+  MODEL_PROVIDER_DETAILS,
+  type ModelProvider
+} from "@/defines/modelProviders";
 import { PerformanceDashboard } from "@/components/PerformanceDashboard";
 import FormAnalysisDisplay from "@/components/FormAnalysisDisplay";
 
@@ -33,6 +39,11 @@ interface ScanJob {
   // Read off the job record rather than the live toggle, so a result stays
   // labelled correctly even if Dev Mode is flipped afterwards.
   devMode?: boolean;
+  // Which model produced this result. Read off the job for the same reason as
+  // `devMode`: flipping the switch afterwards must not relabel a finished scan.
+  modelProvider?: ModelProvider;
+  modelLabel?: string;
+  model?: string;
 }
 
 interface PerFormProgress {
@@ -53,6 +64,7 @@ const createImmediateScanId = () => `scan-${Date.now()}`;
 export const AIScanner = () => {
   const [url, setUrl] = useState("");
   const [fullCrawl, setFullCrawl] = useState(false); // Default OFF as requested
+  const [modelProvider, setModelProvider] = useState<ModelProvider>(DEFAULT_MODEL_PROVIDER);
   const [currentJob, setCurrentJob] = useState<ScanJob | null>(null);
   // The live socket is an external resource, not render input: nothing in the
   // JSX reads it, only `resetScan` needs a handle to close it. A ref keeps it
@@ -148,6 +160,10 @@ export const AIScanner = () => {
     setFullCrawl(checked);
   };
 
+  const handleModelProviderSelect = (provider: ModelProvider) => {
+    setModelProvider(provider);
+  };
+
   const startAIScan = async () => {
     if (!url) {
       toast({
@@ -171,7 +187,8 @@ export const AIScanner = () => {
       const scanResults = await formAPI.startScan({
         url,
         fullCrawl, // Pass the crawling mode to the backend
-        devMode: isDevMode // Pass dev mode state to backend
+        devMode: isDevMode, // Pass dev mode state to backend
+        modelProvider // Which model should run the analysis
       });
       
       // Check if this is immediate results (our current backend) or job-based response
@@ -185,7 +202,10 @@ export const AIScanner = () => {
           currentStep: 'Scan completed',
           createdAt: new Date().toISOString(),
           results: scanResults,
-          devMode: scanResults.devMode === true
+          devMode: scanResults.devMode === true,
+          modelProvider: scanResults.modelProvider,
+          modelLabel: scanResults.modelLabel,
+          model: scanResults.model
         });
 
         toast({
@@ -201,7 +221,10 @@ export const AIScanner = () => {
           progress: 0,
           currentStep: 'Queued for processing...',
           createdAt: new Date().toISOString(),
-          devMode: scanResults.devMode === true
+          devMode: scanResults.devMode === true,
+          modelProvider: scanResults.modelProvider,
+          modelLabel: scanResults.modelLabel,
+          model: scanResults.model
         });
 
         toast({
@@ -418,6 +441,50 @@ export const AIScanner = () => {
                       </div>
                     </div>
 
+                  {/* Analysis model switch */}
+                  <div className="relative p-4 rounded-lg border transition-all duration-200 bg-muted/30 border-border/30">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center space-x-4 flex-1">
+                        <div className="p-2 rounded-lg bg-sky-500/20 text-sky-400">
+                          <Sparkles className="h-5 w-5" />
+                        </div>
+
+                        <div className="flex-1">
+                          <h3 className="text-base font-semibold text-white mb-1">
+                            Analysis model
+                          </h3>
+
+                          <p className="text-sm text-slate-400">
+                            {MODEL_PROVIDER_DETAILS[modelProvider].blurb}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div
+                        role="radiogroup"
+                        aria-label="Analysis model"
+                        className="flex rounded-lg border border-slate-600 overflow-hidden"
+                      >
+                        {Object.values(MODEL_PROVIDERS).map((provider) => (
+                          <button
+                            key={provider}
+                            type="button"
+                            role="radio"
+                            aria-checked={modelProvider === provider}
+                            onClick={() => handleModelProviderSelect(provider)}
+                            className={`px-4 py-2 text-sm font-medium transition-colors ${
+                              modelProvider === provider
+                                ? 'bg-sky-600 text-white'
+                                : 'bg-slate-800/60 text-slate-300 hover:bg-slate-700/60'
+                            }`}
+                          >
+                            {MODEL_PROVIDER_DETAILS[provider].label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Description based on mode */}
                   <div className="text-sm space-y-3">
                     <p className="text-slate-300 font-medium">🤖 AI agent will {fullCrawl ? "autonomously" : "systematically"}:</p>
@@ -482,6 +549,13 @@ export const AIScanner = () => {
                     AI Scan Progress
                   </div>
                   <div className="flex items-center gap-2">
+                    {currentJob.modelLabel && (
+                      <Badge variant="outline" className="text-xs">
+                        <Sparkles className="h-3 w-3 mr-1" />
+                        {currentJob.modelLabel}
+                        {currentJob.model ? ` \u00b7 ${currentJob.model}` : ''}
+                      </Badge>
+                    )}
                     {currentJob.devMode && (
                       <Badge variant="secondary" className="text-xs">
                         <FlaskConical className="h-3 w-3 mr-1" />

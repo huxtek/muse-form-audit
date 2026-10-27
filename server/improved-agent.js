@@ -1,5 +1,3 @@
-import OpenAI from 'openai';
-import { CrawlerTools, toolDefinitions } from './tools.js';
 import { AIAgent } from './agent.js';
 
 /**
@@ -248,8 +246,12 @@ export class ImprovedFullCrawlAgent extends AIAgent {
       try {
         console.log(`🔍 [${i + 1}/${totalForms}] Analyzing form: ${form.formId} from ${form.pageUrl}`);
         
-        // Use parent's individual form analysis logic
-        const analysis = await this.tools.analyzeFormAccessibility(form.formHtml);
+        // Model-scored, with the heuristic as fallback (see AIAgent.scoreForm).
+        const analysis = await this.scoreForm({
+          formHtml: form.formHtml,
+          formId: form.formId,
+          fields: form.fields
+        });
         
         // Create analyzed form object
         const analyzedForm = {

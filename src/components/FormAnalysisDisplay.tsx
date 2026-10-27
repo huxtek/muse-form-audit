@@ -199,10 +199,24 @@ const FormAnalysisDisplay: React.FC<FormAnalysisDisplayProps> = ({
                       <div>
                         <div className="flex justify-between items-center mb-2">
                           <span className="text-sm font-medium">Overall Score</span>
-                          <span className={`font-bold ${getScoreColor(form.accessibility.score, form.accessibility.maxScore)}`}>
-                            {form.accessibility.score || 0}/{form.accessibility.maxScore || 100}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {form.accessibility.analysisSource && (
+                              <Badge variant="outline" className="text-xs">
+                                {form.accessibility.analysisSource === 'model'
+                                  ? 'Scored by model'
+                                  : 'Heuristic fallback'}
+                              </Badge>
+                            )}
+                            <span className={`font-bold ${getScoreColor(form.accessibility.score, form.accessibility.maxScore)}`}>
+                              {form.accessibility.score || 0}/{form.accessibility.maxScore || 100}
+                            </span>
+                          </div>
                         </div>
+                        {form.accessibility.narrative && (
+                          <p className="text-sm text-muted-foreground mb-2">
+                            {form.accessibility.narrative}
+                          </p>
+                        )}
                         <Progress 
                           value={form.accessibility.maxScore ? (form.accessibility.score || 0) / form.accessibility.maxScore * 100 : 0} 
                           className="h-2"

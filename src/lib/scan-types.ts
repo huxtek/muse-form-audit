@@ -96,6 +96,13 @@ export interface FormAccessibility {
   categories?: AccessibilityCategories;
   aiAccessibility?: AIAccessibility;
   fieldAnalysis?: FieldAnalysis[];
+  /**
+   * Who produced this score: the selected model, or the deterministic
+   * fallback used when the model call fails or is unconfigured.
+   */
+  analysisSource?: 'model' | 'heuristic';
+  /** The model's prose take on what an AI agent would struggle with. */
+  narrative?: string;
 }
 
 /** Bookkeeping the scanner records alongside a form's analysis. */

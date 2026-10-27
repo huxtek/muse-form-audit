@@ -19,6 +19,15 @@ import { AIAgent } from './agent.js';
 import { rewriteOrigin } from './lib/rewriteOrigin.js';
 import { getFixtureHostname, rewriteProseHostDeep } from './lib/rewriteProseHost.js';
 import { ImprovedFullCrawlAgent } from './improved-agent.js';
+import {
+  createLlmProvider,
+  describeProviders,
+  isValidProvider,
+  resolveProviderName
+} from './lib/llm/index.js';
+
+/** Which env var each provider needs, for the startup banner only. */
+const MODEL_ENV_VARS = { heuristic: null, muse: 'MODEL_API_KEY', openai: 'OPENAI_API_KEY' };
 import analyzeRoutes from './routes/analyze.js';
 import { validateURLMiddleware, getUrlGuardConfig } from './middleware/validation.js';
 import {
@@ -106,8 +115,11 @@ app.get('/health', publicLimiter, (req, res) => {
     uptime: process.uptime(),
     services: {
       // Presence only. Never report key material.
-      openai: process.env.OPENAI_API_KEY ? 'configured' : 'not configured',
       browser: process.env.BROWSERLESS_TOKEN ? 'configured' : 'not configured'
+    },
+    models: {
+      default: resolveProviderName(),
+      providers: describeProviders()
     },
     urlGuard: {
       allowPrivateTargets: getUrlGuardConfig().allowPrivateTargets
@@ -343,14 +355,24 @@ app.use('/api', analyzeRoutes);
 
 app.post('/api/scan', scanLimiter, validateURLMiddleware, async (req, res) => {
   try {
-    const { fullCrawl = false, devMode = false } = req.body;
+    const { fullCrawl = false, devMode = false, modelProvider } = req.body;
     const validatedURL = req.validatedURL;
     const jobId = uuidv4();
+
+    // Untrusted input: only an allowlisted provider name is honoured, anything
+    // else falls back to the server default.
+    const providerName = resolveProviderName(
+      isValidProvider(modelProvider) ? modelProvider : undefined
+    );
+    const provider = createLlmProvider(providerName);
 
     const job = {
       id: jobId,
       url: validatedURL,
       fullCrawl,
+      modelProvider: providerName,
+      modelLabel: provider.label,
+      model: provider.model,
       status: 'queued',
       createdAt: new Date().toISOString(),
       progress: 0,
@@ -387,7 +409,10 @@ app.post('/api/scan', scanLimiter, validateURLMiddleware, async (req, res) => {
         jobId,
         message: `Mock ${fullCrawl ? 'full crawl' : 'single page'} scan initiated`,
         websocket_url: `ws://${HOST}:${PORT}`,
-        devMode: true
+        devMode: true,
+        modelProvider: providerName,
+        modelLabel: provider.label,
+        model: provider.model
       });
       return;
     }
@@ -416,7 +441,7 @@ app.post('/api/scan', scanLimiter, validateURLMiddleware, async (req, res) => {
         formsAnalyzed: currentJob.formsAnalyzed || 0,
         formsFound: currentJob.formsFound || 0
       });
-    });
+    }, providerName);
 
     agents.set(jobId, agent);
 
@@ -442,7 +467,10 @@ app.post('/api/scan', scanLimiter, validateURLMiddleware, async (req, res) => {
       success: true,
       jobId,
       message: 'Scan initiated successfully',
-      websocket_url: `ws://${HOST}:${PORT}`
+      websocket_url: `ws://${HOST}:${PORT}`,
+      modelProvider: providerName,
+      modelLabel: provider.label,
+      model: provider.model
     });
   } catch (error) {
     console.error('Scan initiation error:', error.message);
@@ -538,7 +566,13 @@ server.listen(PORT, HOST, () => {
   console.log(`  environment      ${process.env.NODE_ENV || 'development'}`);
   console.log(`  health check     http://${HOST}:${PORT}/health`);
   console.log(`  allowed origins  ${originAllowlist.join(', ')}`);
-  console.log(`  openai key       ${process.env.OPENAI_API_KEY ? 'configured' : 'missing (use mock mode)'}`);
+  console.log(`  default analysis ${resolveProviderName()}`);
+  Object.entries(describeProviders()).forEach(([name, info]) => {
+    const status = info.configured
+      ? 'ready'
+      : `missing ${MODEL_ENV_VARS[name] ?? 'credentials'}`;
+    console.log(`    ${name.padEnd(11)}${status.padEnd(26)} (${info.model})`);
+  });
   console.log(`  browser token    ${process.env.BROWSERLESS_TOKEN ? 'configured' : 'missing (use mock mode)'}`);
   console.log(`  mock scan delay  ${MOCK_SCAN_DELAY_MS}ms`);
   console.log('  NOTE: this server has no authentication. Do not expose it publicly.');

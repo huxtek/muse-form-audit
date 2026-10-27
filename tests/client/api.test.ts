@@ -171,3 +171,25 @@ describe('formAPI.analyzeForm', () => {
     });
   });
 });
+
+describe('formAPI.startScan model provider', () => {
+  it('forwards modelProvider in the request body', async () => {
+    const fetchMock = respondWith({ success: true, jobId: 'job-1' });
+
+    await formAPI.startScan({
+      url: 'https://example.com',
+      fullCrawl: false,
+      devMode: true,
+      modelProvider: 'openai'
+    });
+
+    // Regression guard: the field was declared on the interface but omitted
+    // from the body, so the server silently used its default provider.
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      url: 'https://example.com',
+      fullCrawl: false,
+      devMode: true,
+      modelProvider: 'openai'
+    });
+  });
+});

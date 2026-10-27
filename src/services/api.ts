@@ -6,6 +6,8 @@ export interface StartScanRequest {
   url: string;
   fullCrawl: boolean;
   devMode: boolean;
+  /** Which model provider should run the analysis. Server allowlists this. */
+  modelProvider?: string;
 }
 
 /**
@@ -33,13 +35,13 @@ const throwResponseError = async (response: Response, fallback: string) => {
  */
 export const formAPI = {
   /** Kicks off an asynchronous scan job. Returns `{ success, jobId, ... }`. */
-  startScan: async ({ url, fullCrawl, devMode }: StartScanRequest) => {
+  startScan: async ({ url, fullCrawl, devMode, modelProvider }: StartScanRequest) => {
     const response = await fetch(`${API_BASE_URL}/scan`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ url, fullCrawl, devMode })
+      body: JSON.stringify({ url, fullCrawl, devMode, modelProvider })
     });
 
     if (!response.ok) {

@@ -26,21 +26,26 @@ function redactToken(text, token) {
  * keys that are actually absent, and never echoes a key value.
  */
 export function missingCredentialsMessage() {
+  // A model key can come from either provider, so report the model requirement
+  // as satisfied if at least one is present.
+  const hasModelKey = Boolean(process.env.MODEL_API_KEY || process.env.OPENAI_API_KEY);
+  const hasBrowser = Boolean(process.env.BROWSERLESS_TOKEN);
+
   const missing = [];
-  if (!process.env.OPENAI_API_KEY) missing.push('OPENAI_API_KEY');
-  if (!process.env.BROWSERLESS_TOKEN) missing.push('BROWSERLESS_TOKEN');
+  if (!hasModelKey) missing.push('a model key (MODEL_API_KEY for Muse, or OPENAI_API_KEY for OpenAI)');
+  if (!hasBrowser) missing.push('BROWSERLESS_TOKEN');
 
   let subject;
   if (missing.length === 2) {
     subject = 'neither is set';
   } else if (missing.length === 1) {
-    subject = `${missing[0]} is not set`;
+    subject = `${missing[0]} is missing`;
   } else {
     subject = 'both are set';
   }
 
   return (
-    `Real scans need both OPENAI_API_KEY and BROWSERLESS_TOKEN, but ${subject}. ` +
+    `Real scans need a model key and BROWSERLESS_TOKEN, but ${subject}. ` +
     'Add the missing value(s) to .env (free Browserless token at https://browserless.io), ' +
     'or turn on Dev Mode in the UI to run the full flow on mock data with no keys.'
   );

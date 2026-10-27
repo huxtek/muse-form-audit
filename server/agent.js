@@ -1,5 +1,6 @@
-import OpenAI from 'openai';
 import { CrawlerTools, toolDefinitions, missingCredentialsMessage } from './tools.js';
+import { createLlmProvider } from './lib/llm/index.js';
+import { analyzeFormWithModel } from './lib/analysis/modelFormAnalyzer.js';
 
 /**
  * AI Agent for autonomous website crawling and form analysis
@@ -7,16 +8,15 @@ import { CrawlerTools, toolDefinitions, missingCredentialsMessage } from './tool
  * Enhanced with token management and rate limiting
  */
 export class AIAgent {
-  constructor(jobId, targetUrl, fullCrawl, scanTier, progressCallback) {
+  constructor(jobId, targetUrl, fullCrawl, scanTier, progressCallback, modelProvider) {
     this.jobId = jobId;
     this.targetUrl = targetUrl;
     this.fullCrawl = fullCrawl; // Store crawling mode
     this.scanTier = scanTier || 'premium';
     this.progressCallback = progressCallback;
     this.tools = new CrawlerTools();
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
+    // Muse by default; OpenAI stays available so a demo can compare the two.
+    this.llm = createLlmProvider(modelProvider);
     this.isRunning = false;
     this.messages = [];
     this.maxIterations = this.fullCrawl ? 30 : 5; // Fewer iterations for single page
@@ -692,8 +692,7 @@ IMPORTANT: Use the specific data provided above. Show actual HTML examples from 
 
     console.log(`📤 Making single AI summary call...`);
     
-    const completion = await this.openai.chat.completions.create({
-      model: "gpt-5", // GPT-5 model
+    const completion = await this.llm.createCompletion({
       messages: [
         {
           role: "system",
@@ -704,7 +703,7 @@ IMPORTANT: Use the specific data provided above. Show actual HTML examples from 
           content: summaryPrompt
         }
       ],
-      max_completion_tokens: 2000 // GPT-5 parameter
+      maxTokens: 2000
     });
 
     const aiSummary = completion.choices[0].message.content;
@@ -798,13 +797,12 @@ IMPORTANT: Use the specific data provided above. Show actual HTML examples from 
           currentStep: `Making API call (${totalTokens} tokens)...`
         });
 
-        // Call OpenAI GPT-5 with full context
-        const completion = await this.openai.chat.completions.create({
-          model: "gpt-5", // GPT-5 model with enhanced capabilities
+        // Call the selected model with full context
+        const completion = await this.llm.createCompletion({
           messages: this.messages,
           tools: toolDefinitions,
-          tool_choice: "auto",
-          max_completion_tokens: 4000 // GPT-5 parameter - Increased for better responses
+          toolChoice: "auto",
+          maxTokens: 4000
         });
 
         // Log the full OpenAI response for debugging
@@ -1115,7 +1113,7 @@ IMPORTANT: Use the specific data provided above. Show actual HTML examples from 
    * Start the autonomous scanning process with enhanced error handling and logging
    */
   async startScan() {
-    if (!process.env.OPENAI_API_KEY) {
+    if (!this.llm.isConfigured()) {
       throw new Error(missingCredentialsMessage());
     }
 
@@ -1123,7 +1121,7 @@ IMPORTANT: Use the specific data provided above. Show actual HTML examples from 
     console.log(`🆔 Job ID: ${this.jobId}`);
     console.log(`🌐 Target URL: ${this.targetUrl}`);
     console.log(`🎯 Crawling Mode: ${this.fullCrawl ? 'FULL WEBSITE CRAWL' : 'SINGLE PAGE ANALYSIS'}`);
-    console.log(`🤖 AI Model: gpt-5 (GPT-5 with enhanced capabilities)`);
+    console.log(`🤖 AI Model: ${this.llm.model} (provider: ${this.llm.label})`);
     console.log(`👤 Scan tier: ${this.scanTier.toUpperCase()}`);
     console.log(`⏱️  Rate Limiting: ${this.getRateLimitDelay() === 0 ? 'DISABLED' : `${this.getRateLimitDelay()/1000}s delay`}`);
     console.log(`⚙️  Max iterations: ${this.maxIterations}`);
@@ -1461,8 +1459,7 @@ Please provide a comprehensive AI AGENT COMPATIBILITY report focusing on:
 
 Focus on AI agent needs: name attributes, field identification, form submission capability, and automation blockers.`;
 
-      const finalCompletion = await this.openai.chat.completions.create({
-        model: "gpt-5", // GPT-5 model
+      const finalCompletion = await this.llm.createCompletion({
         messages: [
           {
             role: "system", 
@@ -1473,7 +1470,7 @@ Focus on AI agent needs: name attributes, field identification, form submission 
             content: scanSummary
           }
         ],
-        max_completion_tokens: 2000 // GPT-5 parameter
+        maxTokens: 2000
       });
 
       const detailedReport = finalCompletion.choices[0].message.content;
@@ -1992,12 +1989,35 @@ Focus on AI agent needs: name attributes, field identification, form submission 
   /**
    * Analyze an individual form in detail using comprehensive analysis
    */
+  /**
+   * Scores one form. The selected model produces the scores, category issues
+   * and recommendations; the deterministic analyser runs first and is handed
+   * over as the fallback so a model failure degrades instead of breaking the
+   * scan. Both the single-page and full-crawl paths go through here.
+   */
+  async scoreForm({ formHtml, formId, fields }) {
+    const heuristicAnalysis = await this.tools.analyzeFormAccessibility(formHtml || '');
+
+    return analyzeFormWithModel({
+      provider: this.llm,
+      formHtml,
+      formId,
+      url: this.targetUrl,
+      fields,
+      heuristicAnalysis
+    });
+  }
+
   async analyzeIndividualForm(formData) {
     console.log(`🔍 Analyzing individual form: ${formData.formId}`);
     
     try {
-      // Use the comprehensive form analysis from tools
-      const comprehensiveAnalysis = await this.tools.analyzeFormAccessibility(formData.formHtml || formData.html || '');
+      // The model does the scoring; the heuristic is the fallback.
+      const comprehensiveAnalysis = await this.scoreForm({
+        formHtml: formData.formHtml || formData.html || '',
+        formId: formData.formId,
+        fields: formData.fields
+      });
       
       // Create a detailed analysis result compatible with the existing system
       const analysis = {
@@ -2011,7 +2031,10 @@ Focus on AI agent needs: name attributes, field identification, form submission 
           recommendations: comprehensiveAnalysis.recommendations || [],
           categories: comprehensiveAnalysis.categories || {},
           aiAccessibility: comprehensiveAnalysis.aiAccessibility || {},
-          fieldAnalysis: comprehensiveAnalysis.fieldAnalysis || []
+          fieldAnalysis: comprehensiveAnalysis.fieldAnalysis || [],
+          // 'model' or 'heuristic', so the report can say who scored this.
+          analysisSource: comprehensiveAnalysis.analysisSource,
+          ...(comprehensiveAnalysis.narrative ? { narrative: comprehensiveAnalysis.narrative } : {})
         }
       };
       
