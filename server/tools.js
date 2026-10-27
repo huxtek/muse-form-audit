@@ -1,7 +1,11 @@
 import puppeteer from 'puppeteer-core';
 import * as cheerio from 'cheerio';
 import xml2js from 'xml2js';
-import { captureFormVisuals } from './lib/visuals/captureFormVisuals.js';
+import {
+  captureFormVisuals,
+  capturePageMap,
+  readFormGeometry
+} from './lib/visuals/captureFormVisuals.js';
 
 /**
  * AI Tools for comprehensive website crawling and form analysis
@@ -410,9 +414,22 @@ export class CrawlerTools {
         // Mark current URL as visited
         this.visited.add(url);
 
-        // Per-form screenshots and field geometry, while the page is still
-        // open. Cheerio cannot supply coordinates, so this is the only chance.
-        const formVisuals = await captureFormVisuals(page);
+        // Screenshots and geometry, while the page is still open. Cheerio
+        // cannot supply coordinates, so this is the only chance. Geometry is
+        // read once and shared between the form crops and the page map.
+        let formVisuals = [];
+        let pageMap = null;
+        try {
+          const geometry = await readFormGeometry(page);
+          formVisuals = await captureFormVisuals(page, { geometry });
+          if (geometry.forms.length > 0) {
+            pageMap = await capturePageMap(page, { pageSize: geometry.pageSize });
+          }
+        } catch (visualError) {
+          // A visual failure must never fail the scan; the written findings
+          // are the product, the pictures are an aid.
+          console.warn(`⚠️  [VISUALS] Capture skipped: ${visualError.message}`);
+        }
 
         await page.close();
         
@@ -432,7 +449,8 @@ export class CrawlerTools {
           status: response.status(),
           fullContentPreserved: true,
           originalSize: html.length,
-          formVisuals
+          formVisuals,
+          pageMap
         };
         
       } catch (error) {

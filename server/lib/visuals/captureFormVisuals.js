@@ -30,7 +30,13 @@ export const VISUAL_LIMITS = {
    * its first label, so without this the content sits flush against the frame
    * and a rounded corner clips it.
    */
-  padding: Number(process.env.VISUAL_CAPTURE_PADDING || 16)
+  padding: Number(process.env.VISUAL_CAPTURE_PADDING || 16),
+  /**
+   * The whole-page map is a navigation aid, not evidence, so it is JPEG --
+   * roughly a tenth the size of the equivalent PNG. Form crops stay lossless.
+   */
+  pageMapQuality: Number(process.env.VISUAL_PAGE_MAP_QUALITY || 70),
+  maxPageMapHeight: Number(process.env.VISUAL_MAX_PAGE_MAP_HEIGHT || 8000)
 };
 
 /**
@@ -148,14 +154,20 @@ export function resolvePadding(formRect, pageSize, requested) {
  * still reports its fields and an explicit reason, so the client can show the
  * text findings rather than an empty frame.
  */
-export async function captureFormVisuals(page, { limits = VISUAL_LIMITS, logger = console } = {}) {
-  let geometry;
-  try {
-    geometry = await readFormGeometry(page, limits);
-  } catch (error) {
-    logger.warn?.(`⚠️  [VISUALS] Geometry read failed: ${error.message}`);
+export async function captureFormVisuals(
+  page,
+  { limits = VISUAL_LIMITS, logger = console, geometry: preRead } = {}
+) {
+  let geometry = preRead;
 
-    return [];
+  if (!geometry) {
+    try {
+      geometry = await readFormGeometry(page, limits);
+    } catch (error) {
+      logger.warn?.(`⚠️  [VISUALS] Geometry read failed: ${error.message}`);
+
+      return [];
+    }
   }
 
   const visuals = [];
@@ -166,7 +178,10 @@ export async function captureFormVisuals(page, { limits = VISUAL_LIMITS, logger 
       signature: form.signature,
       fields: form.fields,
       width: form.rect.width,
-      height: form.rect.height
+      height: form.rect.height,
+      // Where the form sits on the page, in page coordinates. This is what
+      // makes the form clickable on the whole-page map.
+      pageRect: form.rect
     };
 
     if (!form.visible) {
@@ -240,6 +255,56 @@ export async function captureFormVisuals(page, { limits = VISUAL_LIMITS, logger 
 }
 
 /**
+ * Captures a whole-page screenshot to act as a map: the user sees the page
+ * they scanned, with each analysed form outlined and clickable.
+ *
+ * JPEG rather than PNG because a full page can be several megabytes losslessly
+ * and this image is only ever used for orientation. Height is capped so one
+ * very long page cannot dominate the store.
+ */
+export async function capturePageMap(page, { limits = VISUAL_LIMITS, pageSize, logger = console } = {}) {
+  const height = pageSize?.height ?? 0;
+  const capped = height > limits.maxPageMapHeight;
+
+  try {
+    const buffer = await page.screenshot({
+      type: 'jpeg',
+      quality: limits.pageMapQuality,
+      ...(capped
+        ? {
+            clip: {
+              x: 0,
+              y: 0,
+              width: pageSize.width,
+              height: limits.maxPageMapHeight
+            },
+            captureBeyondViewport: true
+          }
+        : { fullPage: true })
+    });
+
+    logger.log?.(
+      `🗺  [VISUALS] Page map captured ${pageSize?.width ?? '?'}x${
+        capped ? limits.maxPageMapHeight : height || '?'
+      } (${Math.round(buffer.length / 1024)} kB jpeg)`
+    );
+
+    return {
+      screenshot: Buffer.from(buffer),
+      contentType: 'image/jpeg',
+      byteLength: buffer.length,
+      width: pageSize?.width ?? 0,
+      height: capped ? limits.maxPageMapHeight : height,
+      truncated: capped
+    };
+  } catch (error) {
+    logger.warn?.(`⚠️  [VISUALS] Page map capture failed: ${error.message}`);
+
+    return null;
+  }
+}
+
+/**
  * Strips the image bytes off a visual, leaving the JSON-safe geometry that
  * ships inside the scan results. The bytes go to the screenshot store.
  */
@@ -300,8 +365,29 @@ export function attachVisualsToForms({
   // Screenshots are keyed per job, so a crawl spanning several pages offsets
   // local form indexes into a global sequence to keep keys unique.
   indexOffset = 0,
+  // Whole-page map for the page these forms came from, stored once and
+  // referenced by every form on it.
+  pageMap = null,
+  pageIndex = 0,
+  putPageMap,
   logger = console
 }) {
+  if (pageMap?.screenshot && jobId && putPageMap) {
+    putPageMap(jobId, pageIndex, {
+      buffer: pageMap.screenshot,
+      contentType: pageMap.contentType
+    });
+  }
+
+  const pageMapRef = pageMap?.screenshot
+    ? {
+        pageIndex,
+        width: pageMap.width,
+        height: pageMap.height,
+        truncated: Boolean(pageMap.truncated)
+      }
+    : null;
+
   return forms.map((form, index) => {
     const visual = visuals[index];
     const visualIndex = indexOffset + index;
@@ -325,6 +411,13 @@ export function attachVisualsToForms({
       });
     }
 
-    return { ...form, visual: { ...toVisualMetadata(visual), visualIndex } };
+    return {
+      ...form,
+      visual: {
+        ...toVisualMetadata(visual),
+        visualIndex,
+        ...(pageMapRef ? { pageMap: pageMapRef } : {})
+      }
+    };
   });
 }

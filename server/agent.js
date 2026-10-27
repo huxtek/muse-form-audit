@@ -2,7 +2,7 @@ import { CrawlerTools, toolDefinitions, missingCredentialsMessage } from './tool
 import { createLlmProvider } from './lib/llm/index.js';
 import { analyzeFormWithModel } from './lib/analysis/modelFormAnalyzer.js';
 import { attachVisualsToForms } from './lib/visuals/captureFormVisuals.js';
-import { putScreenshot } from './lib/visuals/screenshotStore.js';
+import { putPageMap, putScreenshot } from './lib/visuals/screenshotStore.js';
 
 /**
  * AI Agent for autonomous website crawling and form analysis
@@ -1797,7 +1797,10 @@ Focus on AI agent needs: name attributes, field identification, form submission 
         forms: extractedForms,
         visuals: pageData.formVisuals,
         jobId: this.jobId,
-        putScreenshot
+        putScreenshot,
+        pageMap: pageData.pageMap,
+        pageIndex: 0,
+        putPageMap
       });
       const formsCount = formsData.length;
       

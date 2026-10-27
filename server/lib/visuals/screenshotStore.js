@@ -17,7 +17,13 @@ const MAX_TOTAL_BYTES = Number(process.env.SCREENSHOT_STORE_MAX_BYTES || 150 * 1
 const store = new Map();
 let totalBytes = 0;
 
-const keyFor = (jobId, formIndex) => `${jobId}:${formIndex}`;
+/** Two kinds of image share one budget: per-form crops and whole-page maps. */
+export const IMAGE_KINDS = {
+  FORM: 'form',
+  PAGE: 'page'
+};
+
+const keyFor = (jobId, kind, index) => `${jobId}:${kind}:${index}`;
 
 /** Drops oldest entries until the store is back inside its budget. */
 function evictToFit() {
@@ -31,12 +37,12 @@ function evictToFit() {
   }
 }
 
-export function putScreenshot(jobId, formIndex, { buffer, contentType = 'image/png' }) {
+function putImage(jobId, kind, index, { buffer, contentType }) {
   if (!buffer?.length) {
     return;
   }
 
-  const key = keyFor(jobId, formIndex);
+  const key = keyFor(jobId, kind, index);
   const existing = store.get(key);
   if (existing) {
     totalBytes -= existing.byteLength;
@@ -53,8 +59,22 @@ export function putScreenshot(jobId, formIndex, { buffer, contentType = 'image/p
   evictToFit();
 }
 
+/** A per-form crop. PNG, because it is the evidence. */
+export function putScreenshot(jobId, formIndex, { buffer, contentType = 'image/png' }) {
+  putImage(jobId, IMAGE_KINDS.FORM, formIndex, { buffer, contentType });
+}
+
 export function getScreenshot(jobId, formIndex) {
-  return store.get(keyFor(jobId, formIndex)) ?? null;
+  return store.get(keyFor(jobId, IMAGE_KINDS.FORM, formIndex)) ?? null;
+}
+
+/** A whole-page map. JPEG, because it is only for orientation. */
+export function putPageMap(jobId, pageIndex, { buffer, contentType = 'image/jpeg' }) {
+  putImage(jobId, IMAGE_KINDS.PAGE, pageIndex, { buffer, contentType });
+}
+
+export function getPageMap(jobId, pageIndex) {
+  return store.get(keyFor(jobId, IMAGE_KINDS.PAGE, pageIndex)) ?? null;
 }
 
 export function deleteJobScreenshots(jobId) {

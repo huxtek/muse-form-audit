@@ -17,7 +17,13 @@ import { createServer } from 'http';
 import { v4 as uuidv4 } from 'uuid';
 import { AIAgent } from './agent.js';
 import { rewriteOrigin } from './lib/rewriteOrigin.js';
-import { getScreenshot, putScreenshot, screenshotStoreStats } from './lib/visuals/screenshotStore.js';
+import {
+  getPageMap,
+  getScreenshot,
+  putPageMap,
+  putScreenshot,
+  screenshotStoreStats
+} from './lib/visuals/screenshotStore.js';
 import {
   SAMPLE_FIELD_ISSUES,
   SAMPLE_FORM_IMAGE,
@@ -548,6 +554,42 @@ app.get('/api/screenshot/:jobId/:formIndex', (req, res) => {
   // the browser from rendering this image when the UI is served from a
   // different port. Relaxed for this endpoint only; access is still gated by
   // the unguessable job id and the CORS allowlist.
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.send(image.buffer);
+});
+
+/**
+ * Serves the whole-page map for one scanned page. JPEG; used as a navigation
+ * aid with each analysed form outlined on it.
+ */
+app.get('/api/page-map/:jobId/:pageIndex', (req, res) => {
+  const { jobId, pageIndex } = req.params;
+
+  if (!jobs.has(jobId)) {
+    res.status(404).json({ error: 'Not Found', message: 'Unknown job' });
+
+    return;
+  }
+
+  const index = Number.parseInt(pageIndex, 10);
+  if (!Number.isInteger(index) || index < 0) {
+    res.status(400).json({ error: 'Bad Request', message: 'pageIndex must be a non-negative integer' });
+
+    return;
+  }
+
+  const image = getPageMap(jobId, index);
+  if (!image) {
+    res.status(404).json({ error: 'Not Found', message: 'No page map for that page' });
+
+    return;
+  }
+
+  res.set('Content-Type', image.contentType);
+  res.set('Content-Length', String(image.byteLength));
+  res.set('Cache-Control', 'private, max-age=3600');
+  // See the screenshot endpoint: helmet's same-origin default would stop the
+  // browser rendering this when the UI is served from another port.
   res.set('Cross-Origin-Resource-Policy', 'cross-origin');
   res.send(image.buffer);
 });

@@ -1,6 +1,6 @@
 import { AIAgent } from './agent.js';
 import { attachVisualsToForms } from './lib/visuals/captureFormVisuals.js';
-import { putScreenshot } from './lib/visuals/screenshotStore.js';
+import { putPageMap, putScreenshot } from './lib/visuals/screenshotStore.js';
 
 /**
  * Improved AI Agent specifically for FULL CRAWL mode
@@ -155,7 +155,12 @@ export class ImprovedFullCrawlAgent extends AIAgent {
           visuals: pageResult.formVisuals,
           jobId: this.jobId,
           putScreenshot,
-          indexOffset: totalFormsFound
+          indexOffset: totalFormsFound,
+          pageMap: pageResult.pageMap,
+          // One map per crawled page, so every form links to the page it
+          // actually came from.
+          pageIndex: i,
+          putPageMap
         });
 
         if (pageForms && pageForms.length > 0) {
