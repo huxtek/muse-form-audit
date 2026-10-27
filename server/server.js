@@ -26,8 +26,8 @@ import {
 } from './lib/visuals/screenshotStore.js';
 import {
   SAMPLE_FIELD_ISSUES,
-  SAMPLE_FORM_IMAGE,
   SAMPLE_PAGE_IMAGE,
+  sampleFormImage,
   sampleFormVisual
 } from './lib/visuals/sampleFormVisual.js';
 import { getFixtureHostname, rewriteProseHostDeep } from './lib/rewriteProseHost.js';
@@ -273,7 +273,10 @@ function attachSampleVisuals(mockResponse, jobId) {
       form.accessibility.fieldIssues = SAMPLE_FIELD_ISSUES;
     }
 
-    putScreenshot(jobId, index, { buffer: SAMPLE_FORM_IMAGE, contentType: 'image/png' });
+    putScreenshot(jobId, index, {
+      buffer: sampleFormImage(index).buffer,
+      contentType: 'image/png'
+    });
     putPageMap(jobId, form.visual.pageMap.pageIndex, {
       buffer: SAMPLE_PAGE_IMAGE,
       contentType: 'image/png'

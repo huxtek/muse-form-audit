@@ -562,4 +562,50 @@ describe('sample form visual', () => {
 
     expect(sampleFormVisual(3)).toMatchObject({ visualIndex: 3, hasScreenshot: true, isSample: true });
   });
+
+  it('alternates a tall and a short wide shape, both matching their image', async () => {
+    const {
+      SAMPLE_WIDE_FIELDS,
+      SAMPLE_WIDE_HEIGHT,
+      SAMPLE_WIDE_IMAGE,
+      SAMPLE_WIDE_WIDTH,
+      sampleFormImage,
+      sampleFormVisual
+    } = await import('../../server/lib/visuals/sampleFormVisual.js');
+
+    // A short wide capture is what exposed the clipped tooltip and the weak
+    // enlarged view, so Dev Mode has to be able to reproduce it.
+    expect(sampleFormVisual(0).sampleShape).toBe('tall');
+    expect(sampleFormVisual(1).sampleShape).toBe('wide');
+    expect(sampleFormVisual(1)).toMatchObject({
+      width: SAMPLE_WIDE_WIDTH,
+      height: SAMPLE_WIDE_HEIGHT
+    });
+    // Wide really is wide: the aspect ratio is what matters for the layout.
+    expect(SAMPLE_WIDE_WIDTH / SAMPLE_WIDE_HEIGHT).toBeGreaterThan(5);
+
+    expect(SAMPLE_WIDE_IMAGE.readUInt32BE(16)).toBe(SAMPLE_WIDE_WIDTH);
+    expect(SAMPLE_WIDE_IMAGE.readUInt32BE(20)).toBe(SAMPLE_WIDE_HEIGHT);
+
+    for (const field of SAMPLE_WIDE_FIELDS) {
+      expect(field.rect.x + field.rect.width).toBeLessThanOrEqual(SAMPLE_WIDE_WIDTH);
+      expect(field.rect.y + field.rect.height).toBeLessThanOrEqual(SAMPLE_WIDE_HEIGHT);
+    }
+
+    expect(sampleFormImage(0).buffer).not.toBe(sampleFormImage(1).buffer);
+  });
+
+  it('leaves some wide-sample findings unplaceable on purpose', async () => {
+    const { SAMPLE_FIELD_ISSUES, SAMPLE_WIDE_FIELDS } = await import(
+      '../../server/lib/visuals/sampleFormVisual.js'
+    );
+
+    const wideNames = new Set(SAMPLE_WIDE_FIELDS.map((field) => field.name));
+    const unplaceable = SAMPLE_FIELD_ISSUES.filter((issue) => !wideNames.has(issue.field));
+
+    // The wide sample carries fewer controls than the findings name, so the
+    // "not on image" path is exercised in Dev Mode rather than only on real
+    // scans where a capture happens to miss a control.
+    expect(unplaceable.length).toBeGreaterThan(0);
+  });
 });

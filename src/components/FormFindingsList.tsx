@@ -36,7 +36,9 @@ export const FormFindingsList = ({
         Findings ({form.accessibility?.fieldIssues?.length ?? 0})
       </h5>
 
-      <ul className="space-y-1.5">{groups.map(renderGroup)}</ul>
+      {/* Two columns once there is room: stacked under a full-width
+          screenshot, a long list would push everything else off screen. */}
+      <ul className="grid gap-1.5 sm:grid-cols-2">{groups.map(renderGroup)}</ul>
 
       <p className="text-xs text-muted-foreground">
         Hover to locate on the screenshot, click to keep it highlighted.

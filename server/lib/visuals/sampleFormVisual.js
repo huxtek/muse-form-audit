@@ -33,6 +33,21 @@ export const SAMPLE_PAGE_IMAGE = readFileSync(
 export const SAMPLE_PAGE_WIDTH = 1000;
 export const SAMPLE_PAGE_HEIGHT = 1320;
 
+/**
+ * A short, wide sample form -- a login/signup bar.
+ *
+ * The tall sample always leaves room for a tooltip, so it cannot exercise the
+ * cases short captures produce: a tooltip that overhangs the frame, and an
+ * enlarged view that has to scale up rather than sit at natural size. Real
+ * pages are full of these, so Dev Mode carries one.
+ */
+export const SAMPLE_WIDE_IMAGE = readFileSync(
+  path.join(__dirname, '..', '..', 'mock-data', 'sample-form-wide.png')
+);
+
+export const SAMPLE_WIDE_WIDTH = 1280;
+export const SAMPLE_WIDE_HEIGHT = 132;
+
 /** Forms per sample page, so a mock crawl spreads across several maps. */
 export const SAMPLE_FORMS_PER_PAGE = 3;
 
@@ -65,6 +80,18 @@ export const SAMPLE_FORM_FIELDS = [
   field('subject', 'select', 'select', 210, 224, 280, 34),
   field('message', 'textarea', 'textarea', 210, 280, 440, 62),
   field('submitRequest', 'submit', 'button', 210, 356, 150, 38)
+];
+
+/**
+ * Controls on the wide sample, laid out in one row. Deliberately a SUBSET of
+ * the field names above: the findings that name `subject` and `message` then
+ * have no box to draw, which exercises the "not on image" path too.
+ */
+export const SAMPLE_WIDE_FIELDS = [
+  field('fullName', 'text', 'input', 48, 54, 230, 36),
+  field('emailAddress', 'email', 'input', 318, 54, 270, 36),
+  field('phoneNumber', 'tel', 'input', 628, 54, 200, 36),
+  field('submitRequest', 'submit', 'button', 868, 54, 150, 36)
 ];
 
 /**
@@ -113,21 +140,41 @@ export function samplePagePlacement(visualIndex) {
   return { pageIndex, pageRect: SAMPLE_PAGE_SLOTS[slot] };
 }
 
+/**
+ * Which sample shape a mock form uses. Alternating means a single mock crawl
+ * shows both a tall form and a short wide one, so the layout can be checked
+ * against both without spending any API credit.
+ */
+export function isWideSample(visualIndex) {
+  return visualIndex % 2 === 1;
+}
+
+/** The bundled crop for a mock form, and its dimensions. */
+export function sampleFormImage(visualIndex) {
+  return isWideSample(visualIndex)
+    ? { buffer: SAMPLE_WIDE_IMAGE, width: SAMPLE_WIDE_WIDTH, height: SAMPLE_WIDE_HEIGHT }
+    : { buffer: SAMPLE_FORM_IMAGE, width: SAMPLE_FORM_WIDTH, height: SAMPLE_FORM_HEIGHT };
+}
+
 /** Visual metadata for one mock form, matching the bundled images. */
 export function sampleFormVisual(visualIndex) {
   const { pageIndex, pageRect } = samplePagePlacement(visualIndex);
+  const wide = isWideSample(visualIndex);
+  const fields = wide ? SAMPLE_WIDE_FIELDS : SAMPLE_FORM_FIELDS;
+  const { width, height } = sampleFormImage(visualIndex);
 
   return {
     formIndex: visualIndex,
     visualIndex,
-    signature: { id: '', name: '', action: '/contact', fieldCount: SAMPLE_FORM_FIELDS.length },
+    signature: { id: '', name: '', action: '/contact', fieldCount: fields.length },
     visible: true,
-    width: SAMPLE_FORM_WIDTH,
-    height: SAMPLE_FORM_HEIGHT,
+    width,
+    height,
     truncated: false,
-    fields: SAMPLE_FORM_FIELDS,
+    fields,
     hasScreenshot: true,
     isSample: true,
+    sampleShape: wide ? 'wide' : 'tall',
     pageRect,
     pageMap: {
       pageIndex,

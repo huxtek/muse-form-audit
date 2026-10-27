@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import { Maximize2 } from "lucide-react";
 import FormFindingsList from "@/components/FormFindingsList";
 import FormVisualOverlay from "@/components/FormVisualOverlay";
@@ -29,7 +35,11 @@ export const FormVisualPanel = ({ form, jobId, showSeverityCounts = true }: Form
 
   return (
     <div className="space-y-3">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] items-start">
+      {/* Stacked, not side by side. The results card is around 700px wide, so
+          splitting it left a 1280px-wide capture rendering at roughly a third
+          of its size -- unreadable. Full width plus the enlarged view is the
+          better trade. */}
+      <div className="space-y-4">
         <div className="space-y-2 min-w-0">
           <FormVisualOverlay {...getOverlayProps()} />
 
@@ -45,15 +55,20 @@ export const FormVisualPanel = ({ form, jobId, showSeverityCounts = true }: Form
       </div>
 
       <Dialog open={zoomOpen} onOpenChange={setZoomOpen}>
-        <DialogContent className="max-w-[95vw] w-fit max-h-[92vh] overflow-auto">
+        {/* Explicit width: the default DialogContent is max-w-lg, and sizing to
+            content left a short wide capture barely larger than inline. */}
+        <DialogContent className="w-[95vw] max-w-[1800px] max-h-[92vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>
               {form.formId ? `Form ${form.formId}` : "Form screenshot"}
             </DialogTitle>
+            <DialogDescription>
+              Hover a highlight to read its findings, or click to keep it open.
+            </DialogDescription>
           </DialogHeader>
 
           {/* Same controlled selection, so a pin set inline stays set here. */}
-          <FormVisualOverlay {...getOverlayProps()} />
+          <FormVisualOverlay {...getOverlayProps()} enlarged />
         </DialogContent>
       </Dialog>
     </div>

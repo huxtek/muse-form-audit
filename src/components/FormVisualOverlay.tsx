@@ -24,7 +24,8 @@ export const FormVisualOverlay = ({
   hoveredField = null,
   pinnedField = null,
   onHoverField,
-  onPinField
+  onPinField,
+  enlarged = false
 }: FormVisualOverlayProps) => {
   const visual = form.visual;
   const fieldIssues = form.accessibility?.fieldIssues ?? [];
@@ -72,9 +73,16 @@ export const FormVisualOverlay = ({
 
       {/* A light "paper" frame so the capture reads as a web page against the
           dark UI. The padding also means the frame's rounded corners never sit
-          over the screenshot's own content. */}
-      <div className="inline-block max-w-full rounded-xl border border-border/60 bg-white p-2 shadow-lg shadow-black/20">
-        <div className="relative inline-block max-w-full overflow-hidden rounded-md">
+          over the screenshot's own content.
+
+          Deliberately NOT overflow-hidden: tooltips are positioned against the
+          highlights, and clipping the frame cut them off on short captures. */}
+      <div
+        className={`rounded-xl border border-border/60 bg-white p-2 shadow-lg shadow-black/20 ${
+          enlarged ? "block w-full" : "inline-block max-w-full"
+        }`}
+      >
+        <div className={`relative ${enlarged ? "block w-full" : "inline-block max-w-full"}`}>
           <img {...getImageProps()} />
 
           {imageState === "ready" && highlightedFields().map(renderHighlight)}
@@ -158,10 +166,13 @@ export const FormVisualOverlay = ({
     const frameHeight = naturalSize?.height || visual?.height || 0;
     const below = entry.field.rect.y + entry.field.rect.height < frameHeight * 0.7;
 
+    // pointer-events-none: a short capture leaves the tooltip hanging over
+    // whatever sits below the image, and an informational panel must never
+    // swallow a click meant for a control underneath it.
     return (
       <div
         role="tooltip"
-        className={`absolute z-20 w-72 max-w-[80vw] p-3 rounded-md border border-border bg-popover text-popover-foreground shadow-lg text-left ${
+        className={`absolute z-20 w-72 max-w-[80vw] p-3 rounded-md border border-border bg-popover text-popover-foreground shadow-lg text-left pointer-events-none ${
           below ? "top-full mt-2" : "bottom-full mb-2"
         } left-0`}
       >
@@ -226,7 +237,11 @@ export const FormVisualOverlay = ({
     return {
       src: getScreenshotUrl(jobId, visual?.visualIndex ?? 0),
       alt: `Screenshot of form ${form.formId ?? visual?.visualIndex}`,
-      className: "block max-w-full h-auto",
+      // Enlarged fills the dialog width, so a short wide crop still gets
+      // bigger rather than rendering at its own modest natural size.
+      className: enlarged
+        ? "block w-full h-auto rounded-md"
+        : "block max-w-full h-auto rounded-md",
       // Reserving the captured ratio stops the highlights flashing in the
       // wrong place for a frame while the image decodes.
       style: { aspectRatio: `${visual?.width} / ${visual?.height}` },
@@ -395,6 +410,12 @@ interface FormVisualOverlayProps {
   pinnedField?: string | null;
   onHoverField?: (identifier: string | null) => void;
   onPinField?: (identifier: string | null) => void;
+  /**
+   * Fill the available width rather than sitting at the capture's natural
+   * size. Used by the enlarged view, where a short wide crop would otherwise
+   * barely grow.
+   */
+  enlarged?: boolean;
 }
 
 interface HighlightEntry {
