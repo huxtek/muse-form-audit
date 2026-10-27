@@ -88,6 +88,55 @@ export interface FieldAnalysis {
 }
 
 /** The accessibility report attached to each analyzed form. */
+/** Severity of a per-field finding, worst first. */
+export type IssueSeverity = 'high' | 'medium' | 'low';
+
+/**
+ * A finding attributed to one control. `field` is the control's `name`, or its
+ * `id` when it has no name, and is what the visual overlay matches boxes on.
+ */
+export interface FieldIssue {
+  field: string;
+  severity: IssueSeverity;
+  issue: string;
+}
+
+/** A control's position inside the captured form screenshot. */
+export interface VisualFieldRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface VisualField {
+  name: string;
+  id: string;
+  type: string;
+  tagName: string;
+  value: string;
+  rect: VisualFieldRect;
+  renderable: boolean;
+}
+
+/**
+ * Screenshot geometry for one form. The image itself is served separately from
+ * `/api/screenshot/:jobId/:visualIndex` so polling stays small; `width` and
+ * `height` describe the captured image, and every field rect is relative to it.
+ */
+export interface FormVisual {
+  visualIndex: number;
+  width: number;
+  height: number;
+  fields: VisualField[];
+  hasScreenshot: boolean;
+  /** True when the capture was clamped because the form was very large. */
+  truncated?: boolean;
+  /** True for the bundled Dev Mode wireframe rather than a real capture. */
+  isSample?: boolean;
+  unavailableReason?: string;
+}
+
 export interface FormAccessibility {
   score?: number;
   maxScore?: number;
@@ -96,6 +145,8 @@ export interface FormAccessibility {
   categories?: AccessibilityCategories;
   aiAccessibility?: AIAccessibility;
   fieldAnalysis?: FieldAnalysis[];
+  /** Per-control findings, used to highlight the form screenshot. */
+  fieldIssues?: FieldIssue[];
   /**
    * Who produced this score: the selected model, or the deterministic
    * fallback used when the model call fails or is unconfigured.
@@ -134,6 +185,8 @@ export interface AnalyzedForm {
   metadata?: FormMetadata;
   analyzedAt?: string;
   globalFormIndex?: number;
+  /** Screenshot geometry, present when the capture succeeded. */
+  visual?: FormVisual;
 
   id?: string;
   accessibilityScore?: number;

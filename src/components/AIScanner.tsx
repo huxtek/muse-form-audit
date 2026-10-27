@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Bot, Scan, Download, ExternalLink, AlertTriangle, CheckCircle, Clock, Zap, Globe, FileText, FlaskConical, Sparkles } from "lucide-react";
+import { Bot, Scan, Download, ExternalLink, AlertTriangle, CheckCircle, Clock, Zap, Globe, FileText, FlaskConical, Sparkles, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDevMode } from "@/contexts/DevModeContext";
 import { getWebSocketUrl } from "@/lib/api-config";
@@ -20,8 +20,25 @@ import {
   MODEL_PROVIDER_DETAILS,
   type ModelProvider
 } from "@/defines/modelProviders";
+import { SEVERITY_ORDER, SEVERITY_STYLES } from "@/defines/severities";
+import type { IssueSeverity } from "@/lib/scan-types";
 import { PerformanceDashboard } from "@/components/PerformanceDashboard";
 import FormAnalysisDisplay from "@/components/FormAnalysisDisplay";
+import FormVisualOverlay from "@/components/FormVisualOverlay";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+/** Result view tabs. Visual is the default; the written findings sit behind Details. */
+const RESULT_TABS = {
+  VISUAL: 'visual',
+  DETAILS: 'details'
+} as const;
+
+/**
+ * Up to this many forms are stacked in the visual tab. Beyond it a picker
+ * shows one at a time, because a full crawl can return fourteen screenshots
+ * and stacking them buries everything below the first.
+ */
+const STACKED_FORM_LIMIT = 3;
 
 interface ScanJob {
   id: string;
@@ -65,6 +82,8 @@ export const AIScanner = () => {
   const [url, setUrl] = useState("");
   const [fullCrawl, setFullCrawl] = useState(false); // Default OFF as requested
   const [modelProvider, setModelProvider] = useState<ModelProvider>(DEFAULT_MODEL_PROVIDER);
+  // Which form the visual tab is showing when there are too many to stack.
+  const [selectedFormIndex, setSelectedFormIndex] = useState(0);
   const [currentJob, setCurrentJob] = useState<ScanJob | null>(null);
   // The live socket is an external resource, not render input: nothing in the
   // JSX reads it, only `resetScan` needs a handle to close it. A ref keeps it
@@ -162,6 +181,10 @@ export const AIScanner = () => {
 
   const handleModelProviderSelect = (provider: ModelProvider) => {
     setModelProvider(provider);
+  };
+
+  const handleSelectForm = (index: number) => {
+    setSelectedFormIndex(index);
   };
 
   const startAIScan = async () => {
@@ -264,6 +287,147 @@ export const AIScanner = () => {
     }
   };
 
+  /**
+   * Headline numbers for the visual tab. The full dashboard lives in Details,
+   * so this keeps the score and the finding counts in view without pushing the
+   * screenshot down the page.
+   */
+  const renderScoreStrip = () => {
+    const forms = currentJob?.results?.forms ?? [];
+    const summary = currentJob?.results?.summary;
+    const scores = forms
+      .map((form) => form.accessibility?.score)
+      .filter((score): score is number => typeof score === 'number');
+    const averageScore = scores.length
+      ? Math.round(scores.reduce((total, score) => total + score, 0) / scores.length)
+      : null;
+
+    const counts = forms.reduce(
+      (acc, form) => {
+        for (const issue of form.accessibility?.fieldIssues ?? []) {
+          acc[issue.severity] = (acc[issue.severity] ?? 0) + 1;
+        }
+
+        return acc;
+      },
+      { high: 0, medium: 0, low: 0 } as Record<IssueSeverity, number>
+    );
+
+    return (
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 p-4 rounded-lg border border-border/40 bg-muted/20">
+        {averageScore !== null && (
+          <div>
+            <div className="text-2xl font-bold text-foreground leading-none">{averageScore}%</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {forms.length > 1 ? 'Average AI compatibility' : 'AI compatibility'}
+            </div>
+          </div>
+        )}
+
+        <div>
+          <div className="text-2xl font-bold text-foreground leading-none">{forms.length}</div>
+          <div className="text-xs text-muted-foreground mt-1">
+            {forms.length === 1 ? 'Form analyzed' : 'Forms analyzed'}
+            {summary?.totalPages ? ` on ${summary.totalPages} page${summary.totalPages === 1 ? '' : 's'}` : ''}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+          {SEVERITY_ORDER.every((severity) => counts[severity] === 0) ? (
+            <Badge variant="outline" className="text-xs">
+              <CheckCircle className="h-3 w-3 mr-1" />
+              No field-level issues
+            </Badge>
+          ) : (
+            SEVERITY_ORDER.map((severity) => (
+              <Badge key={severity} variant="outline" className="text-xs">
+                <span className={`inline-block h-2 w-2 rounded-full mr-2 ${SEVERITY_STYLES[severity].dot}`} />
+                {counts[severity]} {SEVERITY_STYLES[severity].label}
+              </Badge>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  /**
+   * The default results view: one annotated screenshot per form.
+   *
+   * A handful of forms stack; beyond that a picker shows one at a time, since
+   * a full crawl can return fourteen and stacking them is unnavigable.
+   */
+  const renderVisualTab = () => {
+    const forms = currentJob?.results?.forms ?? [];
+
+    if (forms.length === 0) {
+      return (
+        <div className="p-4 rounded-lg border border-border/50 bg-muted/30 text-sm text-muted-foreground">
+          No forms were found on this page, so there is nothing to highlight.
+        </div>
+      );
+    }
+
+    if (forms.length <= STACKED_FORM_LIMIT) {
+      return <div className="space-y-8">{forms.map(renderVisualForm)}</div>;
+    }
+
+    const index = Math.min(selectedFormIndex, forms.length - 1);
+
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground mr-1">
+            Form {index + 1} of {forms.length}
+          </span>
+
+          {forms.map((form, formIndex) => (
+            <button
+              key={`pick-${form.formId || 'form'}-${formIndex}`}
+              type="button"
+              aria-current={formIndex === index}
+              onClick={() => handleSelectForm(formIndex)}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                formIndex === index
+                  ? 'bg-sky-600 border-sky-600 text-white'
+                  : 'bg-muted/40 border-border/50 text-muted-foreground hover:bg-muted/70'
+              }`}
+            >
+              {formIndex + 1}
+            </button>
+          ))}
+        </div>
+
+        {renderVisualForm(forms[index], index)}
+      </div>
+    );
+  };
+
+  const renderVisualForm = (form: ScanResults['forms'][number], index: number) => (
+    <div key={`${form.url || 'page'}-${form.formId || 'form'}-${index}`} className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <h4 className="font-semibold text-foreground">Form {index + 1}</h4>
+        {form.formId && (
+          <code className="text-xs font-mono text-muted-foreground">{form.formId}</code>
+        )}
+        {typeof form.accessibility?.score === 'number' && (
+          <Badge variant="outline" className="text-xs">
+            {form.accessibility.score}/100
+          </Badge>
+        )}
+        {form.url && (
+          <span className="text-xs text-muted-foreground truncate max-w-full">{form.url}</span>
+        )}
+      </div>
+
+      <FormVisualOverlay
+        form={form}
+        jobId={currentJob?.id ?? ''}
+        showSeverityCounts={(currentJob?.results?.forms?.length ?? 0) > 1}
+      />
+    </div>
+  );
+
   const downloadReport = () => {
     if (currentJob?.results) {
       try {
@@ -294,6 +458,7 @@ export const AIScanner = () => {
     setCurrentJob(null);
     setUrl("");
     setFullCrawl(false); // Reset to default OFF state
+    setSelectedFormIndex(0);
     setPerFormProgress({
       formsFound: 0,
       formsAnalyzed: 0
@@ -709,18 +874,36 @@ export const AIScanner = () => {
                   </Alert>
                 )}
 
-                {/* Performance Dashboard */}
-                <div className="mb-6">
-                  <PerformanceDashboard results={currentJob.results} />
-                </div>
+                {/* The scanned form comes first; numbers and prose sit behind
+                    the Details tab so the visual is what lands on screen. */}
+                <Tabs defaultValue={RESULT_TABS.VISUAL} className="w-full">
+                  <TabsList>
+                    <TabsTrigger value={RESULT_TABS.VISUAL}>
+                      <Eye className="h-4 w-4 mr-2" />
+                      Visual
+                    </TabsTrigger>
+                    <TabsTrigger value={RESULT_TABS.DETAILS}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Details
+                    </TabsTrigger>
+                  </TabsList>
 
-                {/* Comprehensive Form Analysis Display */}
-                <FormAnalysisDisplay 
-                  forms={currentJob.results.forms || []}
-                  summary={currentJob.results.summary}
-                  aiSummary={getNormalizedResults(currentJob).aiSummary}
-                  scanMode={getNormalizedResults(currentJob).scanMode}
-                />
+                  <TabsContent value={RESULT_TABS.VISUAL} className="mt-4 space-y-5">
+                    {renderScoreStrip()}
+                    {renderVisualTab()}
+                  </TabsContent>
+
+                  <TabsContent value={RESULT_TABS.DETAILS} className="mt-4 space-y-6">
+                    <PerformanceDashboard results={currentJob.results} />
+
+                    <FormAnalysisDisplay
+                      forms={currentJob.results.forms || []}
+                      summary={currentJob.results.summary}
+                      aiSummary={getNormalizedResults(currentJob).aiSummary}
+                      scanMode={getNormalizedResults(currentJob).scanMode}
+                    />
+                  </TabsContent>
+                </Tabs>
 
                 {/* Scan Metadata */}
                 {currentJob.results.scanMetadata && (

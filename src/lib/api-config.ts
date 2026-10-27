@@ -22,6 +22,7 @@ export const API_CONFIG = {
     SCAN: '/api/scan',
     REPORT: '/api/report',
     JOBS: '/api/jobs',
+    SCREENSHOT: '/api/screenshot',
     HEALTH: '/health'
   }
 };
@@ -29,3 +30,10 @@ export const API_CONFIG = {
 export const getWebSocketUrl = (): string => {
   return API_CONFIG.WS_URL;
 };
+
+/**
+ * URL of a captured form screenshot. The bytes are served from their own
+ * endpoint rather than inlined in the scan results, so polling stays small.
+ */
+export const getScreenshotUrl = (jobId: string, visualIndex: number): string =>
+  `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SCREENSHOT}/${encodeURIComponent(jobId)}/${visualIndex}`;
