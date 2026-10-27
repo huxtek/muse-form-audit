@@ -37,6 +37,7 @@ Rules:
 - "issues" are problems that block or mislead an AI agent, worst first.
 - "recommendations" are concrete fixes, each naming the field or attribute to change.
 - Do not pad the lists. Fewer, sharper items are better than many vague ones.
+- "fieldIssues" attributes problems to individual controls so they can be highlighted on a screenshot of the form. This is important: for every control with a problem, add an entry whose "field" is EXACTLY the control's name attribute, or its id if it has no name. Copy the value character for character from the HTML -- do not paraphrase, pluralise, or describe it. If several controls share a name (radio or checkbox groups), one entry for that name is enough. Omit controls that have no problem. Severity must be "high", "medium" or "low".
 
 Return exactly this JSON structure:
 {
@@ -52,6 +53,9 @@ Return exactly this JSON structure:
   },
   "issues": ["top-level issues, worst first"],
   "recommendations": ["concrete fixes"],
+  "fieldIssues": [
+    { "field": "exact-name-or-id", "severity": "high", "issue": "what an AI agent gets wrong about this control" }
+  ],
   "aiAccessibility": {
     "hasLabels": false, "hasAriaLabels": false, "hasNameAttributes": false,
     "hasValidation": false, "hasCaptcha": false, "hasFileUpload": false,

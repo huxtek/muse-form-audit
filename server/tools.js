@@ -1,6 +1,7 @@
 import puppeteer from 'puppeteer-core';
 import * as cheerio from 'cheerio';
 import xml2js from 'xml2js';
+import { captureFormVisuals } from './lib/visuals/captureFormVisuals.js';
 
 /**
  * AI Tools for comprehensive website crawling and form analysis
@@ -408,7 +409,11 @@ export class CrawlerTools {
         
         // Mark current URL as visited
         this.visited.add(url);
-        
+
+        // Per-form screenshots and field geometry, while the page is still
+        // open. Cheerio cannot supply coordinates, so this is the only chance.
+        const formVisuals = await captureFormVisuals(page);
+
         await page.close();
         
         console.log(`✅ Page loaded successfully - FULL content preserved`);
@@ -426,7 +431,8 @@ export class CrawlerTools {
           networkLog,
           status: response.status(),
           fullContentPreserved: true,
-          originalSize: html.length
+          originalSize: html.length,
+          formVisuals
         };
         
       } catch (error) {

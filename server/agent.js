@@ -1,6 +1,8 @@
 import { CrawlerTools, toolDefinitions, missingCredentialsMessage } from './tools.js';
 import { createLlmProvider } from './lib/llm/index.js';
 import { analyzeFormWithModel } from './lib/analysis/modelFormAnalyzer.js';
+import { attachVisualsToForms } from './lib/visuals/captureFormVisuals.js';
+import { putScreenshot } from './lib/visuals/screenshotStore.js';
 
 /**
  * AI Agent for autonomous website crawling and form analysis
@@ -1788,7 +1790,15 @@ Focus on AI agent needs: name attributes, field identification, form submission 
         currentStep: 'Extracting forms from page...'
       });
       
-      const formsData = await this.tools.extractForms(pageData.html);
+      const extractedForms = await this.tools.extractForms(pageData.html);
+      // Pair each form with its screenshot geometry; image bytes go to the
+      // screenshot store so they never travel inside the results JSON.
+      const formsData = attachVisualsToForms({
+        forms: extractedForms,
+        visuals: pageData.formVisuals,
+        jobId: this.jobId,
+        putScreenshot
+      });
       const formsCount = formsData.length;
       
       console.log(`🔍 Discovered ${formsCount} forms on ${this.targetUrl}`);
@@ -2032,6 +2042,8 @@ Focus on AI agent needs: name attributes, field identification, form submission 
           categories: comprehensiveAnalysis.categories || {},
           aiAccessibility: comprehensiveAnalysis.aiAccessibility || {},
           fieldAnalysis: comprehensiveAnalysis.fieldAnalysis || [],
+          // Per-control findings that drive the visual overlay.
+          fieldIssues: comprehensiveAnalysis.fieldIssues || [],
           // 'model' or 'heuristic', so the report can say who scored this.
           analysisSource: comprehensiveAnalysis.analysisSource,
           ...(comprehensiveAnalysis.narrative ? { narrative: comprehensiveAnalysis.narrative } : {})
@@ -2049,6 +2061,11 @@ Focus on AI agent needs: name attributes, field identification, form submission 
         analysisTimestamp: new Date().toISOString(),
         comprehensiveAnalysis: true
       };
+
+      // Screenshot geometry for the visual overlay, if it was captured.
+      if (formData.visual) {
+        analysis.visual = formData.visual;
+      }
       
       console.log(`✅ Comprehensive analysis complete for ${formData.formId}: ${analysis.accessibility.score}/100`);
       console.log(`   📊 Categories analyzed: ${Object.keys(analysis.accessibility.categories || {}).length}`);

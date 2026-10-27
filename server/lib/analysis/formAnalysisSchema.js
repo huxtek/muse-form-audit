@@ -45,6 +45,11 @@ export const ANALYSIS_SOURCES = {
   HEURISTIC: 'heuristic'
 };
 
+/** Severity vocabulary for per-field findings, worst first. */
+export const SEVERITIES = ['high', 'medium', 'low'];
+const DEFAULT_SEVERITY = 'medium';
+const MAX_FIELD_ISSUES = 60;
+
 const MAX_LIST_ITEMS = 25;
 const MAX_ITEM_LENGTH = 500;
 
@@ -83,6 +88,43 @@ const toStringList = (value) => {
     }
 
     if (out.length >= MAX_LIST_ITEMS) {
+      break;
+    }
+  }
+
+  return out;
+};
+
+/**
+ * Per-field findings, which drive the visual overlay. Each entry must name a
+ * control; anything unattributed is dropped, because a highlight with nothing
+ * to point at is worse than no highlight.
+ */
+const toFieldIssues = (value) => {
+  const raw = Array.isArray(value) ? value : [];
+  const out = [];
+
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') {
+      continue;
+    }
+
+    const field = String(item.field ?? item.name ?? item.id ?? '').trim();
+    const message = String(item.issue ?? item.message ?? item.text ?? '').trim();
+
+    if (!field || !message) {
+      continue;
+    }
+
+    const severityRaw = String(item.severity ?? '').trim().toLowerCase();
+
+    out.push({
+      field: field.slice(0, 120),
+      severity: SEVERITIES.includes(severityRaw) ? severityRaw : DEFAULT_SEVERITY,
+      issue: message.slice(0, MAX_ITEM_LENGTH)
+    });
+
+    if (out.length >= MAX_FIELD_ISSUES) {
       break;
     }
   }
@@ -138,6 +180,7 @@ export function normalizeFormAnalysis(raw, { source = ANALYSIS_SOURCES.MODEL } =
     categories,
     aiAccessibility,
     fieldAnalysis: Array.isArray(input.fieldAnalysis) ? input.fieldAnalysis : [],
+    fieldIssues: toFieldIssues(input.fieldIssues),
     analysisSource: source,
     ...(typeof input.narrative === 'string' && input.narrative.trim()
       ? { narrative: input.narrative.trim() }

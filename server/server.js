@@ -17,6 +17,12 @@ import { createServer } from 'http';
 import { v4 as uuidv4 } from 'uuid';
 import { AIAgent } from './agent.js';
 import { rewriteOrigin } from './lib/rewriteOrigin.js';
+import { getScreenshot, putScreenshot, screenshotStoreStats } from './lib/visuals/screenshotStore.js';
+import {
+  SAMPLE_FIELD_ISSUES,
+  SAMPLE_FORM_IMAGE,
+  sampleFormVisual
+} from './lib/visuals/sampleFormVisual.js';
 import { getFixtureHostname, rewriteProseHostDeep } from './lib/rewriteProseHost.js';
 import { ImprovedFullCrawlAgent } from './improved-agent.js';
 import {
@@ -235,7 +241,33 @@ function buildMockResponse(fixture, jobId, validatedURL, fullCrawl) {
   // already on the submitted origin, so this cannot touch them twice.
   rewriteProseHostDeep(mockResponse, fixtureHostname, validatedURL);
 
+  attachSampleVisuals(mockResponse, jobId);
+
   return mockResponse;
+}
+
+/**
+ * Gives every mock form the bundled sample screenshot and matching per-field
+ * findings, so the visual tab works on the zero-key Dev Mode path with no
+ * browser and no network.
+ */
+function attachSampleVisuals(mockResponse, jobId) {
+  const forms = mockResponse?.results?.forms;
+  if (!Array.isArray(forms)) {
+    return;
+  }
+
+  forms.forEach((form, index) => {
+    form.visual = sampleFormVisual(index);
+    form.accessibility = form.accessibility || {};
+    // Only synthesise findings when the fixture has none, so a fixture that
+    // grows its own field issues later wins.
+    if (!Array.isArray(form.accessibility.fieldIssues) || form.accessibility.fieldIssues.length === 0) {
+      form.accessibility.fieldIssues = SAMPLE_FIELD_ISSUES;
+    }
+
+    putScreenshot(jobId, index, { buffer: SAMPLE_FORM_IMAGE, contentType: 'image/png' });
+  });
 }
 
 /**
@@ -479,6 +511,45 @@ app.post('/api/scan', scanLimiter, validateURLMiddleware, async (req, res) => {
       message: IS_PRODUCTION ? 'Failed to initiate scan' : error.message
     });
   }
+});
+
+/**
+ * Serves one captured form screenshot. The bytes are held in process memory
+ * rather than inlined into the scan results, so polling stays small.
+ */
+app.get('/api/screenshot/:jobId/:formIndex', (req, res) => {
+  const { jobId, formIndex } = req.params;
+
+  if (!jobs.has(jobId)) {
+    res.status(404).json({ error: 'Not Found', message: 'Unknown job' });
+
+    return;
+  }
+
+  const index = Number.parseInt(formIndex, 10);
+  if (!Number.isInteger(index) || index < 0) {
+    res.status(400).json({ error: 'Bad Request', message: 'formIndex must be a non-negative integer' });
+
+    return;
+  }
+
+  const image = getScreenshot(jobId, index);
+  if (!image) {
+    res.status(404).json({ error: 'Not Found', message: 'No screenshot for that form' });
+
+    return;
+  }
+
+  res.set('Content-Type', image.contentType);
+  res.set('Content-Length', String(image.byteLength));
+  // Immutable for the life of the job; jobs are in-memory and never reused.
+  res.set('Cache-Control', 'private, max-age=3600');
+  // helmet defaults Cross-Origin-Resource-Policy to same-origin, which blocks
+  // the browser from rendering this image when the UI is served from a
+  // different port. Relaxed for this endpoint only; access is still gated by
+  // the unguessable job id and the CORS allowlist.
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.send(image.buffer);
 });
 
 app.get('/api/report/:jobId', (req, res) => {

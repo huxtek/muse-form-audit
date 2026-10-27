@@ -1,4 +1,6 @@
 import { AIAgent } from './agent.js';
+import { attachVisualsToForms } from './lib/visuals/captureFormVisuals.js';
+import { putScreenshot } from './lib/visuals/screenshotStore.js';
 
 /**
  * Improved AI Agent specifically for FULL CRAWL mode
@@ -144,9 +146,18 @@ export class ImprovedFullCrawlAgent extends AIAgent {
         // Load the page
         const pageResult = await this.tools.goToPage(pageUrl);
         
-        // Extract forms from this page
-        const pageForms = await this.tools.extractForms(pageResult.html);
-        
+        // Extract forms from this page, paired with their screenshot geometry.
+        // Screenshots are keyed by global form index so they stay unique
+        // across pages within one crawl.
+        const extractedPageForms = await this.tools.extractForms(pageResult.html);
+        const pageForms = attachVisualsToForms({
+          forms: extractedPageForms,
+          visuals: pageResult.formVisuals,
+          jobId: this.jobId,
+          putScreenshot,
+          indexOffset: totalFormsFound
+        });
+
         if (pageForms && pageForms.length > 0) {
           console.log(`✅ Found ${pageForms.length} forms on ${pageUrl}`);
           
@@ -262,7 +273,8 @@ export class ImprovedFullCrawlAgent extends AIAgent {
           fields: form.fields,
           accessibility: analysis,
           analyzedAt: new Date().toISOString(),
-          globalFormIndex: form.globalFormIndex
+          globalFormIndex: form.globalFormIndex,
+          ...(form.visual ? { visual: form.visual } : {})
         };
         
         analyzedForms.push(analyzedForm);
