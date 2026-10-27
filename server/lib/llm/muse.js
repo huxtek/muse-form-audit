@@ -21,6 +21,36 @@ export const MUSE_ENDPOINT = 'https://api.meta.ai/v1/responses';
 export const MUSE_DEFAULT_MODEL = 'muse-wonder-1.0';
 
 /**
+ * Chat Completions content part -> Muse content part.
+ *
+ * Verified against the live API: `image_url` must be a FLAT string here. The
+ * nested `{ url }` form that Chat Completions uses is rejected with
+ * "input[0].content did not match any supported type".
+ */
+function toMuseContentPart(part) {
+  if (!part || typeof part !== 'object') {
+    return null;
+  }
+
+  if (part.type === 'text') {
+    return { type: 'input_text', text: part.text ?? '' };
+  }
+
+  if (part.type === 'image_url') {
+    const url = typeof part.image_url === 'string' ? part.image_url : part.image_url?.url;
+
+    return url ? { type: 'input_image', image_url: url } : null;
+  }
+
+  // Already in Muse's vocabulary.
+  if (part.type === 'input_text' || part.type === 'input_image') {
+    return part;
+  }
+
+  return null;
+}
+
+/**
  * Chat Completions request -> Muse Responses request.
  *
  * System messages become top-level `instructions`; everything else becomes an
@@ -76,10 +106,13 @@ export function toMuseRequest({
       continue;
     }
 
-    // user, and anything else, is plain input text.
+    // user, and anything else. Content may be a plain string or the Chat
+    // Completions parts array, which is how an image is attached.
     input.push({
       role: message.role,
-      content: [{ type: 'input_text', text: message.content ?? '' }]
+      content: Array.isArray(message.content)
+        ? message.content.map(toMuseContentPart).filter(Boolean)
+        : [{ type: 'input_text', text: message.content ?? '' }]
     });
   }
 

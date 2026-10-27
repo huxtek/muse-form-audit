@@ -608,4 +608,23 @@ describe('sample form visual', () => {
     // scans where a capture happens to miss a control.
     expect(unplaceable.length).toBeGreaterThan(0);
   });
+
+  it('ships whole-form findings that name no control', async () => {
+    const { SAMPLE_FIELD_ISSUES, SAMPLE_FORM_FINDINGS } = await import(
+      '../../server/lib/visuals/sampleFormVisual.js'
+    );
+
+    expect(SAMPLE_FORM_FINDINGS.length).toBeGreaterThan(0);
+
+    for (const finding of SAMPLE_FORM_FINDINGS) {
+      // A whole-form finding with a field would draw a box, which is exactly
+      // what this bucket exists to avoid.
+      expect(finding).not.toHaveProperty('field');
+      expect(finding.issue.trim()).not.toBe('');
+      expect(SEVERITIES).toContain(finding.severity);
+      // Keeping it out of the per-field list is what makes Dev Mode
+      // representative: the two buckets must not overlap.
+      expect(SAMPLE_FIELD_ISSUES.some((issue) => issue.issue === finding.issue)).toBe(false);
+    }
+  });
 });

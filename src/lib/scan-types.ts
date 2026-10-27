@@ -101,6 +101,18 @@ export interface FieldIssue {
   issue: string;
 }
 
+/**
+ * A finding about the form as a whole, naming no single control.
+ *
+ * These come out of the vision pass: reading order, visual grouping, a
+ * heading that does not describe the form. They have no box to draw, so they
+ * carry no `field` and are listed on their own.
+ */
+export interface FormFinding {
+  severity: IssueSeverity;
+  issue: string;
+}
+
 /** A control's position inside the captured form screenshot. */
 export interface VisualFieldRect {
   x: number;
@@ -160,11 +172,18 @@ export interface FormAccessibility {
   fieldAnalysis?: FieldAnalysis[];
   /** Per-control findings, used to highlight the form screenshot. */
   fieldIssues?: FieldIssue[];
+  /** Findings about the whole form, which highlight nothing on the image. */
+  formFindings?: FormFinding[];
   /**
    * Who produced this score: the selected model, or the deterministic
    * fallback used when the model call fails or is unconfigured.
    */
   analysisSource?: 'model' | 'heuristic';
+  /**
+   * Whether the form's screenshot was sent with its HTML. False means any
+   * visual judgement was unavailable, not that there was nothing to find.
+   */
+  visionUsed?: boolean;
   /** The model's prose take on what an AI agent would struggle with. */
   narrative?: string;
 }

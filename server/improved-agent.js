@@ -266,7 +266,8 @@ export class ImprovedFullCrawlAgent extends AIAgent {
         const analysis = await this.scoreForm({
           formHtml: form.formHtml,
           formId: form.formId,
-          fields: form.fields
+          fields: form.fields,
+          visualIndex: form.visual?.visualIndex
         });
         
         // Create analyzed form object

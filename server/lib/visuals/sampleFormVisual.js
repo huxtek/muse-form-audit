@@ -132,6 +132,24 @@ export const SAMPLE_FIELD_ISSUES = [
   }
 ];
 
+/**
+ * Sample findings that belong to the form as a whole.
+ *
+ * These are the kind of thing the vision pass produces: judgements about
+ * layout and order that name no single control. Dev Mode carries them so the
+ * "Whole form" group is exercised with no keys and no browser.
+ */
+export const SAMPLE_FORM_FINDINGS = [
+  {
+    severity: 'medium',
+    issue: 'The visual order puts the phone field above the email field, but the DOM order is reversed, so an agent filling fields in document order works against what a human sees.'
+  },
+  {
+    severity: 'low',
+    issue: 'Related contact fields are only grouped by proximity, with no fieldset or legend, so the grouping is invisible to an agent.'
+  }
+];
+
 /** Which sample page a mock form sits on, and where on it. */
 export function samplePagePlacement(visualIndex) {
   const pageIndex = Math.floor(visualIndex / SAMPLE_FORMS_PER_PAGE);

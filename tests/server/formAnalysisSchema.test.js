@@ -10,7 +10,9 @@ import {
 } from '../../server/lib/analysis/formAnalysisSchema.js';
 import {
   analyzeFormWithModel,
-  buildAnalysisPrompt
+  buildAnalysisContent,
+  buildAnalysisPrompt,
+  MAX_IMAGE_BYTES
 } from '../../server/lib/analysis/modelFormAnalyzer.js';
 
 /**
@@ -335,5 +337,183 @@ describe('heuristic provider selection', () => {
     expect(result.analysisSource).toBe('heuristic');
     expect(result.score).toBe(43);
     expect(result.issues).toContain('Heuristic issue');
+  });
+});
+describe('formFindings normalisation', () => {
+  it('keeps well-formed entries and defaults an unknown severity', () => {
+    const result = normalizeFormAnalysis({
+      formFindings: [
+        { severity: 'high', issue: 'Visual order disagrees with DOM order' },
+        { severity: 'catastrophic', issue: 'Fields are grouped only by proximity' }
+      ]
+    });
+
+    expect(result.formFindings[0]).toEqual({
+      severity: 'high',
+      issue: 'Visual order disagrees with DOM order'
+    });
+    expect(result.formFindings[1].severity).toBe('medium');
+  });
+
+  it('accepts a bare string, since a model may not wrap it', () => {
+    expect(normalizeFormAnalysis({ formFindings: ['Heading does not describe the form'] })).toMatchObject({
+      formFindings: [{ severity: 'medium', issue: 'Heading does not describe the form' }]
+    });
+  });
+
+  it('keeps an entry with no field, unlike fieldIssues', () => {
+    // This is the whole point of the separate bucket: a finding that names no
+    // control must survive instead of being dropped or attached arbitrarily.
+    const raw = { severity: 'low', issue: 'Submit sits above the last input' };
+
+    expect(normalizeFormAnalysis({ formFindings: [raw] }).formFindings).toHaveLength(1);
+    expect(normalizeFormAnalysis({ fieldIssues: [raw] }).fieldIssues).toEqual([]);
+  });
+
+  it('drops entries with no message', () => {
+    const result = normalizeFormAnalysis({
+      formFindings: [{ severity: 'high' }, { issue: '   ' }, 'x', null, 42]
+    });
+
+    expect(result.formFindings).toEqual([{ severity: 'medium', issue: 'x' }]);
+  });
+
+  it('defaults to an empty list when absent or the wrong type', () => {
+    expect(normalizeFormAnalysis({}).formFindings).toEqual([]);
+    expect(normalizeFormAnalysis({ formFindings: 'nope' }).formFindings).toEqual([]);
+  });
+});
+
+describe('buildAnalysisContent', () => {
+  const imageOf = (content) =>
+    content.find((part) => part.type === 'image_url')?.image_url?.url;
+
+  it('returns the bare prompt when there is no screenshot', () => {
+    // An HTML-only call must look exactly as it did before vision existed, so
+    // no provider has to learn a new shape to keep working.
+    expect(buildAnalysisContent({ prompt: 'score this' })).toBe('score this');
+    expect(buildAnalysisContent({ prompt: 'score this', screenshot: Buffer.alloc(0) })).toBe(
+      'score this'
+    );
+  });
+
+  it('attaches the screenshot as a data url beside the prompt', () => {
+    const content = buildAnalysisContent({
+      prompt: 'score this',
+      screenshot: Buffer.from('fake-png-bytes')
+    });
+
+    expect(content[0]).toEqual({ type: 'text', text: 'score this' });
+    expect(imageOf(content)).toBe(
+      `data:image/png;base64,${Buffer.from('fake-png-bytes').toString('base64')}`
+    );
+  });
+
+  it('honours the capture content type', () => {
+    const content = buildAnalysisContent({
+      prompt: 'p',
+      screenshot: Buffer.from('x'),
+      contentType: 'image/jpeg'
+    });
+
+    expect(imageOf(content)).toMatch(/^data:image\/jpeg;base64,/);
+  });
+
+  it('skips an image over the byte cap rather than sending it', () => {
+    // A huge capture should cost us the visual judgement, not the whole call.
+    const content = buildAnalysisContent({
+      prompt: 'score this',
+      screenshot: Buffer.alloc(MAX_IMAGE_BYTES + 1)
+    });
+
+    expect(content).toBe('score this');
+  });
+});
+
+describe('vision pass', () => {
+  const silent = { log: () => {}, warn: () => {} };
+  const heuristicAnalysis = { score: 43, issues: [], recommendations: [] };
+
+  const modelProvider = (completion) => ({
+    label: 'Muse',
+    isConfigured: () => true,
+    createCompletion: vi.fn().mockResolvedValue(completion)
+  });
+
+  const okCompletion = {
+    choices: [{ message: { content: JSON.stringify({ categories: { labeling: { score: 15 } } }) } }]
+  };
+
+  const contentOf = (provider) => provider.createCompletion.mock.calls[0][0].messages[1].content;
+
+  it('sends the screenshot in the same call as the HTML', async () => {
+    // One combined call, so the model can cross-reference the picture against
+    // the markup instead of judging each in isolation.
+    const provider = modelProvider(okCompletion);
+
+    const result = await analyzeFormWithModel({
+      provider,
+      formHtml: '<form><input name="email"></form>',
+      screenshot: Buffer.from('png'),
+      vision: true,
+      heuristicAnalysis,
+      logger: silent
+    });
+
+    expect(provider.createCompletion).toHaveBeenCalledOnce();
+    expect(contentOf(provider)).toEqual([
+      expect.objectContaining({ type: 'text' }),
+      expect.objectContaining({ type: 'image_url' })
+    ]);
+    expect(result.visionUsed).toBe(true);
+  });
+
+  it('sends HTML alone when vision is disabled', async () => {
+    const provider = modelProvider(okCompletion);
+
+    const result = await analyzeFormWithModel({
+      provider,
+      formHtml: '<form></form>',
+      screenshot: Buffer.from('png'),
+      vision: false,
+      heuristicAnalysis,
+      logger: silent
+    });
+
+    expect(typeof contentOf(provider)).toBe('string');
+    expect(result.visionUsed).toBe(false);
+  });
+
+  it('sends HTML alone when no screenshot was captured', async () => {
+    const provider = modelProvider(okCompletion);
+
+    const result = await analyzeFormWithModel({
+      provider,
+      formHtml: '<form></form>',
+      vision: true,
+      heuristicAnalysis,
+      logger: silent
+    });
+
+    expect(typeof contentOf(provider)).toBe('string');
+    expect(result.visionUsed).toBe(false);
+  });
+
+  it('falls back when the output budget runs out before any JSON', async () => {
+    // An image pushes reasoning tokens up, so a budget that was fine for HTML
+    // alone can truncate. That must degrade, not surface as empty analysis.
+    const provider = modelProvider({ choices: [{ message: { content: null }, finish_reason: 'length' }] });
+
+    const result = await analyzeFormWithModel({
+      provider,
+      formHtml: '<form></form>',
+      screenshot: Buffer.from('png'),
+      vision: true,
+      heuristicAnalysis,
+      logger: silent
+    });
+
+    expect(result.analysisSource).toBe('heuristic');
+    expect(result.score).toBe(43);
   });
 });

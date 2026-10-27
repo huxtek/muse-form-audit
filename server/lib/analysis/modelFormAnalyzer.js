@@ -17,9 +17,21 @@ import {
 /** Form HTML can be enormous; cap what we send per form. */
 export const DEFAULT_HTML_CHAR_LIMIT = Number(process.env.MODEL_HTML_CHAR_LIMIT || 24000);
 
+/**
+ * Send the form's screenshot alongside its HTML. Adds roughly 250 prompt
+ * tokens per form and lets the model judge what markup cannot show. Set
+ * MODEL_VISION=false to analyse from HTML alone.
+ */
+export const VISION_ENABLED = process.env.MODEL_VISION !== 'false';
+
+/** Skip absurdly large images rather than blowing the request up. */
+export const MAX_IMAGE_BYTES = Number(process.env.MODEL_MAX_IMAGE_BYTES || 4 * 1024 * 1024);
+
 const SYSTEM_PROMPT = `You are an expert at assessing how well autonomous AI agents can understand and complete HTML forms.
 
-You will be given the HTML of a single form. Score it across eight categories and return STRICT JSON only -- no prose, no markdown, no code fence.
+You will be given the HTML of a single form, and usually a SCREENSHOT of that same form as rendered in a browser. Use both. Score it across eight categories and return STRICT JSON only -- no prose, no markdown, no code fence.
+
+When a screenshot is provided, also judge what only a picture can show: whether a label actually sits next to the control it describes, whether related controls are grouped visibly, whether anything is too small or too low-contrast to identify, and whether the visual order matches the DOM order. Where the picture and the markup disagree, say so -- a label that looks attached but is not associated in the markup is exactly the trap that defeats an agent.
 
 Scoring rubric (score each category from 0 to its maximum):
 - structural (0-15): is it a real <form> with sane nesting, fieldsets/legends where useful, and a predictable DOM an agent can walk?
@@ -32,11 +44,12 @@ Scoring rubric (score each category from 0 to its maximum):
 - accessibility (0-5): roles, aria state, and readability that help an agent and a screen reader equally.
 
 Rules:
-- Judge ONLY what the HTML shows. Do not assume behaviour you cannot see.
+- Judge ONLY what the HTML and the screenshot show. Do not assume behaviour you cannot see.
 - Be specific and concrete. Quote attribute names and field names from the HTML.
 - "issues" are problems that block or mislead an AI agent, worst first.
 - "recommendations" are concrete fixes, each naming the field or attribute to change.
 - Do not pad the lists. Fewer, sharper items are better than many vague ones.
+- "formFindings" is for problems that belong to the form as a whole and name no single control -- grouping, visual versus DOM order, an unclear heading. Do not put a control-specific problem here; it belongs in fieldIssues. Leave the array empty if there is nothing to say.
 - "fieldIssues" attributes problems to individual controls so they can be highlighted on a screenshot of the form. This is important: for every control with a problem, add an entry whose "field" is EXACTLY the control's name attribute, or its id if it has no name. Copy the value character for character from the HTML -- do not paraphrase, pluralise, or describe it. If several controls share a name (radio or checkbox groups), one entry for that name is enough. Omit controls that have no problem. Severity must be "high", "medium" or "low".
 
 Return exactly this JSON structure:
@@ -55,6 +68,9 @@ Return exactly this JSON structure:
   "recommendations": ["concrete fixes"],
   "fieldIssues": [
     { "field": "exact-name-or-id", "severity": "high", "issue": "what an AI agent gets wrong about this control" }
+  ],
+  "formFindings": [
+    { "severity": "medium", "issue": "a problem with the form as a whole that belongs to no single control, e.g. visual order disagreeing with DOM order" }
   ],
   "aiAccessibility": {
     "hasLabels": false, "hasAriaLabels": false, "hasNameAttributes": false,
@@ -101,6 +117,27 @@ export function buildAnalysisPrompt({ formHtml, formId, url, fields = [], htmlCh
  * Asks the model to score one form. Returns a normalised analysis annotated
  * with `analysisSource`, falling back to `heuristicAnalysis` on any failure.
  */
+/**
+ * Builds the user turn, attaching the screenshot when one is available.
+ *
+ * Returns a Chat Completions content array when there is an image, or a plain
+ * string when there is not, so an HTML-only call looks exactly as it did
+ * before vision existed.
+ */
+export function buildAnalysisContent({ prompt, screenshot, contentType = 'image/png' }) {
+  if (!screenshot?.length || screenshot.length > MAX_IMAGE_BYTES) {
+    return prompt;
+  }
+
+  return [
+    { type: 'text', text: prompt },
+    {
+      type: 'image_url',
+      image_url: { url: `data:${contentType};base64,${screenshot.toString('base64')}` }
+    }
+  ];
+}
+
 export async function analyzeFormWithModel({
   provider,
   formHtml,
@@ -108,6 +145,10 @@ export async function analyzeFormWithModel({
   url,
   fields,
   heuristicAnalysis,
+  /** PNG bytes of the form crop, when one was captured. */
+  screenshot = null,
+  screenshotContentType = 'image/png',
+  vision = VISION_ENABLED,
   maxTokens = Number(process.env.MODEL_ANALYSIS_MAX_TOKENS || 4000),
   htmlCharLimit = DEFAULT_HTML_CHAR_LIMIT,
   logger = console
@@ -147,24 +188,36 @@ export async function analyzeFormWithModel({
   }
 
   try {
+    const prompt = buildAnalysisPrompt({ formHtml, formId, url, fields, htmlCharLimit });
+    const useImage = vision && Boolean(screenshot?.length);
+    const content = useImage
+      ? buildAnalysisContent({ prompt, screenshot, contentType: screenshotContentType })
+      : prompt;
+
     const completion = await provider.createCompletion({
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: buildAnalysisPrompt({ formHtml, formId, url, fields, htmlCharLimit })
-        }
+        { role: 'user', content }
       ],
       maxTokens,
       responseFormat: 'json_object'
     });
 
     const text = completion?.choices?.[0]?.message?.content;
+
+    // An image pushes reasoning tokens up, so a budget that was fine for
+    // HTML alone can truncate before any JSON is written.
+    if (!text && completion?.choices?.[0]?.finish_reason === 'length') {
+      throw new Error('model ran out of output tokens before returning an analysis');
+    }
+
     const analysis = parseModelAnalysis(text);
+    analysis.visionUsed = useImage;
 
     const used = completion?.usage?.total_tokens;
     logger.log?.(
       `   🤖 ${provider.label} scored ${formId || 'form'}: ${analysis.score}/100` +
+        (useImage ? ' [with screenshot]' : '') +
         (used ? ` (${used} tokens)` : '')
     );
 

@@ -26,6 +26,7 @@ import {
 } from './lib/visuals/screenshotStore.js';
 import {
   SAMPLE_FIELD_ISSUES,
+  SAMPLE_FORM_FINDINGS,
   SAMPLE_PAGE_IMAGE,
   sampleFormImage,
   sampleFormVisual
@@ -271,6 +272,9 @@ function attachSampleVisuals(mockResponse, jobId) {
     // grows its own field issues later wins.
     if (!Array.isArray(form.accessibility.fieldIssues) || form.accessibility.fieldIssues.length === 0) {
       form.accessibility.fieldIssues = SAMPLE_FIELD_ISSUES;
+    }
+    if (!Array.isArray(form.accessibility.formFindings) || form.accessibility.formFindings.length === 0) {
+      form.accessibility.formFindings = SAMPLE_FORM_FINDINGS;
     }
 
     putScreenshot(jobId, index, {

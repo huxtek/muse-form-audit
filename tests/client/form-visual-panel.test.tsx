@@ -212,6 +212,57 @@ describe('FormVisualPanel findings list', () => {
   });
 });
 
+describe('FormVisualPanel whole-form findings', () => {
+  const withFormFindings = (fieldIssues: AnalyzedForm['accessibility']['fieldIssues'] = []) =>
+    buildForm({
+      accessibility: {
+        score: 69,
+        fieldIssues,
+        formFindings: [
+          { severity: 'medium', issue: 'Visual order disagrees with DOM order' },
+          { severity: 'low', issue: 'Fields grouped only by proximity' }
+        ]
+      }
+    });
+
+  it('lists findings that belong to the form as a whole', () => {
+    render(<FormVisualPanel form={withFormFindings()} jobId="job-1" />);
+
+    expect(screen.getByText('Whole form')).toBeInTheDocument();
+    expect(screen.getByText('Visual order disagrees with DOM order')).toBeInTheDocument();
+    expect(screen.getByText('Fields grouped only by proximity')).toBeInTheDocument();
+  });
+
+  it('counts them alongside the per-control findings', () => {
+    render(
+      <FormVisualPanel
+        form={withFormFindings([{ field: 'custname', severity: 'high', issue: 'No id attribute' }])}
+        jobId="job-1"
+      />
+    );
+
+    expect(screen.getByText(/Findings \(3\)/)).toBeInTheDocument();
+  });
+
+  it('does not offer them as a highlight target', () => {
+    // There is no box to draw for a whole-form finding, so a hover target here
+    // would promise a highlight that never arrives.
+    render(<FormVisualPanel form={withFormFindings()} jobId="job-1" />);
+    loadImages();
+
+    expect(
+      screen.queryByRole('button', { name: /visual order disagrees/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows them even when no control has a finding', () => {
+    render(<FormVisualPanel form={withFormFindings([])} jobId="job-1" />);
+
+    expect(screen.queryByText(/no field-level findings/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Whole form')).toBeInTheDocument();
+  });
+});
+
 describe('FormVisualPanel enlarged view', () => {
   it('opens an enlarged screenshot on request', () => {
     render(<FormVisualPanel form={buildForm()} jobId="job-1" />);

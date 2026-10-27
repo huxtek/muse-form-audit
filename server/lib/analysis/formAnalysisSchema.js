@@ -133,6 +133,46 @@ const toFieldIssues = (value) => {
 };
 
 /**
+ * Findings about the form as a whole rather than one control.
+ *
+ * Looking at a screenshot surfaces problems that belong to no single field --
+ * reading order, visual grouping, a heading that does not describe the form.
+ * Forcing those to name a control would either drop them or attach them to an
+ * arbitrary field, so they live separately and never draw a box.
+ */
+const toFormFindings = (value) => {
+  const raw = Array.isArray(value) ? value : [];
+  const out = [];
+
+  for (const item of raw) {
+    const message =
+      typeof item === 'string'
+        ? item
+        : item && typeof item === 'object'
+          ? String(item.issue ?? item.message ?? item.text ?? '')
+          : '';
+
+    const trimmed = message.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    const severityRaw = String(item?.severity ?? '').trim().toLowerCase();
+
+    out.push({
+      severity: SEVERITIES.includes(severityRaw) ? severityRaw : DEFAULT_SEVERITY,
+      issue: trimmed.slice(0, MAX_ITEM_LENGTH)
+    });
+
+    if (out.length >= MAX_FIELD_ISSUES) {
+      break;
+    }
+  }
+
+  return out;
+};
+
+/**
  * Normalises a raw analysis object into the canonical shape. Safe to call on
  * model output, heuristic output, or garbage.
  */
@@ -181,6 +221,7 @@ export function normalizeFormAnalysis(raw, { source = ANALYSIS_SOURCES.MODEL } =
     aiAccessibility,
     fieldAnalysis: Array.isArray(input.fieldAnalysis) ? input.fieldAnalysis : [],
     fieldIssues: toFieldIssues(input.fieldIssues),
+    formFindings: toFormFindings(input.formFindings),
     analysisSource: source,
     ...(typeof input.narrative === 'string' && input.narrative.trim()
       ? { narrative: input.narrative.trim() }

@@ -156,6 +156,64 @@ describe('toMuseRequest', () => {
     });
     expect(toMuseRequest({ messages: [] })).not.toHaveProperty('reasoning');
   });
+
+  it('translates a content parts array, so an image can ride with the text', () => {
+    const body = toMuseRequest({
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'score this form' },
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } }
+          ]
+        }
+      ]
+    });
+
+    // image_url must be a FLAT string here. The nested { url } form that Chat
+    // Completions uses is rejected with "did not match any supported type".
+    expect(body.input[0].content).toEqual([
+      { type: 'input_text', text: 'score this form' },
+      { type: 'input_image', image_url: 'data:image/png;base64,AAAA' }
+    ]);
+  });
+
+  it('accepts a flat image_url string and parts already in Muse vocabulary', () => {
+    const body = toMuseRequest({
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: 'data:image/png;base64,BBBB' },
+            { type: 'input_text', text: 'already translated' }
+          ]
+        }
+      ]
+    });
+
+    expect(body.input[0].content).toEqual([
+      { type: 'input_image', image_url: 'data:image/png;base64,BBBB' },
+      { type: 'input_text', text: 'already translated' }
+    ]);
+  });
+
+  it('drops content parts it cannot translate rather than sending a 400', () => {
+    const body = toMuseRequest({
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'keep me' },
+            { type: 'image_url', image_url: {} },
+            { type: 'input_audio', input_audio: {} },
+            null
+          ]
+        }
+      ]
+    });
+
+    expect(body.input[0].content).toEqual([{ type: 'input_text', text: 'keep me' }]);
+  });
 });
 
 describe('fromMuseResponse', () => {

@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, CheckCircle, MapPinOff } from "lucide-react";
+import { AlertTriangle, CheckCircle, Layers, MapPinOff } from "lucide-react";
 import { SEVERITY_ORDER, SEVERITY_STYLES } from "@/defines/severities";
 import type { AnalyzedForm, FieldIssue, IssueSeverity } from "@/lib/scan-types";
 
@@ -20,8 +20,10 @@ export const FormFindingsList = ({
   onPinField
 }: FormFindingsListProps) => {
   const groups = groupByField();
+  const formFindings = form.accessibility?.formFindings ?? [];
+  const total = (form.accessibility?.fieldIssues?.length ?? 0) + formFindings.length;
 
-  if (groups.length === 0) {
+  if (total === 0) {
     return (
       <div className="flex items-center gap-2 p-3 rounded-lg border border-border/40 bg-muted/20 text-sm text-muted-foreground">
         <CheckCircle className="h-4 w-4 text-emerald-500" />
@@ -32,19 +34,53 @@ export const FormFindingsList = ({
 
   return (
     <div className="space-y-2">
-      <h5 className="text-sm font-semibold text-foreground">
-        Findings ({form.accessibility?.fieldIssues?.length ?? 0})
-      </h5>
+      <h5 className="text-sm font-semibold text-foreground">Findings ({total})</h5>
+
+      {formFindings.length > 0 && renderFormFindings()}
 
       {/* Two columns once there is room: stacked under a full-width
           screenshot, a long list would push everything else off screen. */}
-      <ul className="grid gap-1.5 sm:grid-cols-2">{groups.map(renderGroup)}</ul>
+      {groups.length > 0 && (
+        <ul className="grid gap-1.5 sm:grid-cols-2">{groups.map(renderGroup)}</ul>
+      )}
 
-      <p className="text-xs text-muted-foreground">
-        Hover to locate on the screenshot, click to keep it highlighted.
-      </p>
+      {groups.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Hover to locate on the screenshot, click to keep it highlighted.
+        </p>
+      )}
     </div>
   );
+
+  /**
+   * Findings about the form as a whole. Not interactive: there is no control
+   * to light up, so a hover target here would promise a highlight that never
+   * arrives.
+   *
+   * Explicitly left-aligned, because the panel centres the captions around it
+   * and an inherited centre makes a wrapped finding look broken.
+   */
+  function renderFormFindings() {
+    return (
+      <div className="p-2.5 rounded-lg border border-border/40 bg-muted/20 text-left">
+        <span className="flex items-center gap-2 mb-1">
+          <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span className="text-xs font-semibold text-foreground">Whole form</span>
+        </span>
+
+        <ul className="space-y-1">
+          {formFindings.map((finding, index) => (
+            <li key={index} className="flex gap-2 text-xs text-muted-foreground">
+              <AlertTriangle
+                className={`h-3 w-3 mt-0.5 shrink-0 ${SEVERITY_STYLES[finding.severity].text}`}
+              />
+              <span>{finding.issue}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
 
   function renderGroup(group: FieldGroup) {
     const style = SEVERITY_STYLES[group.severity];

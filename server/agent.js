@@ -2,7 +2,7 @@ import { CrawlerTools, toolDefinitions, missingCredentialsMessage } from './tool
 import { createLlmProvider } from './lib/llm/index.js';
 import { analyzeFormWithModel } from './lib/analysis/modelFormAnalyzer.js';
 import { attachVisualsToForms } from './lib/visuals/captureFormVisuals.js';
-import { putPageMap, putScreenshot } from './lib/visuals/screenshotStore.js';
+import { getScreenshot, putPageMap, putScreenshot } from './lib/visuals/screenshotStore.js';
 
 /**
  * AI Agent for autonomous website crawling and form analysis
@@ -2007,9 +2007,15 @@ Focus on AI agent needs: name attributes, field identification, form submission 
    * and recommendations; the deterministic analyser runs first and is handed
    * over as the fallback so a model failure degrades instead of breaking the
    * scan. Both the single-page and full-crawl paths go through here.
+   *
+   * When the form was captured, its crop is sent with the HTML so the model
+   * can judge what markup cannot show. The bytes are read back out of the
+   * screenshot store rather than threaded through the crawl, which keeps the
+   * extracted-form payloads small.
    */
-  async scoreForm({ formHtml, formId, fields }) {
+  async scoreForm({ formHtml, formId, fields, visualIndex }) {
     const heuristicAnalysis = await this.tools.analyzeFormAccessibility(formHtml || '');
+    const capture = Number.isInteger(visualIndex) ? getScreenshot(this.jobId, visualIndex) : null;
 
     return analyzeFormWithModel({
       provider: this.llm,
@@ -2017,7 +2023,9 @@ Focus on AI agent needs: name attributes, field identification, form submission 
       formId,
       url: this.targetUrl,
       fields,
-      heuristicAnalysis
+      heuristicAnalysis,
+      screenshot: capture?.buffer ?? null,
+      screenshotContentType: capture?.contentType ?? 'image/png'
     });
   }
 
@@ -2029,7 +2037,8 @@ Focus on AI agent needs: name attributes, field identification, form submission 
       const comprehensiveAnalysis = await this.scoreForm({
         formHtml: formData.formHtml || formData.html || '',
         formId: formData.formId,
-        fields: formData.fields
+        fields: formData.fields,
+        visualIndex: formData.visual?.visualIndex
       });
       
       // Create a detailed analysis result compatible with the existing system
@@ -2047,8 +2056,13 @@ Focus on AI agent needs: name attributes, field identification, form submission 
           fieldAnalysis: comprehensiveAnalysis.fieldAnalysis || [],
           // Per-control findings that drive the visual overlay.
           fieldIssues: comprehensiveAnalysis.fieldIssues || [],
+          // Findings about the form as a whole, which highlight no control.
+          formFindings: comprehensiveAnalysis.formFindings || [],
           // 'model' or 'heuristic', so the report can say who scored this.
           analysisSource: comprehensiveAnalysis.analysisSource,
+          // Whether the screenshot went with the HTML, so a reader can tell
+          // whether a visual judgement was actually possible.
+          visionUsed: comprehensiveAnalysis.visionUsed ?? false,
           ...(comprehensiveAnalysis.narrative ? { narrative: comprehensiveAnalysis.narrative } : {})
         }
       };
