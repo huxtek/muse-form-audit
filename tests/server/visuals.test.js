@@ -628,3 +628,185 @@ describe('sample form visual', () => {
     }
   });
 });
+
+describe('resolveFormBox', () => {
+  const PAGE = { width: 1280, height: 4000 };
+  const MIN = 8;
+
+  const box = (x, y, width, height) => ({ x, y, width, height });
+
+  it('keeps the form\'s own box when it is usable', async () => {
+    const { resolveFormBox } = await import('../../server/lib/visuals/captureFormVisuals.js');
+
+    const result = resolveFormBox(
+      {
+        ownRect: box(100, 200, 500, 400),
+        // Deliberately larger: a real measurement must not be overridden.
+        childBoxes: [box(0, 0, 1200, 3000)]
+      },
+      PAGE,
+      MIN
+    );
+
+    expect(result.measuredFrom).toBe('form');
+    expect(result.rect).toEqual(box(100, 200, 500, 400));
+  });
+
+  it('falls back to the children when the form has no box of its own', async () => {
+    const { resolveFormBox } = await import('../../server/lib/visuals/captureFormVisuals.js');
+
+    // display: contents gives a 0x0 rect however long the page settles for.
+    const result = resolveFormBox(
+      {
+        ownRect: box(0, 0, 0, 0),
+        childBoxes: [box(100, 200, 300, 50), box(100, 260, 428, 313)],
+        controlBoxes: [box(150, 210, 200, 30)]
+      },
+      PAGE,
+      MIN
+    );
+
+    expect(result.measuredFrom).toBe('children');
+    expect(result.rect).toEqual(box(100, 200, 428, 373));
+  });
+
+  it('prefers children over controls, so labels are not cropped away', async () => {
+    const { resolveFormBox } = await import('../../server/lib/visuals/captureFormVisuals.js');
+
+    // The child wrapper starts at x=100 (the label); the input alone starts at
+    // x=250. Cropping to the input would cut the text that explains it.
+    const result = resolveFormBox(
+      {
+        ownRect: box(0, 0, 0, 0),
+        childBoxes: [box(100, 200, 400, 40)],
+        controlBoxes: [box(250, 205, 200, 30)]
+      },
+      PAGE,
+      MIN
+    );
+
+    expect(result.rect.x).toBe(100);
+    expect(result.measuredFrom).toBe('children');
+  });
+
+  it('uses the controls when there are no measurable children', async () => {
+    const { resolveFormBox } = await import('../../server/lib/visuals/captureFormVisuals.js');
+
+    const result = resolveFormBox(
+      {
+        ownRect: box(0, 0, 0, 0),
+        childBoxes: [],
+        controlBoxes: [box(40, 60, 100, 20), box(40, 100, 160, 20)]
+      },
+      PAGE,
+      MIN
+    );
+
+    expect(result.measuredFrom).toBe('fields');
+    expect(result.rect).toEqual(box(40, 60, 160, 60));
+  });
+
+  it('reports the form box when there is nothing to infer from', async () => {
+    const { resolveFormBox } = await import('../../server/lib/visuals/captureFormVisuals.js');
+
+    // Genuinely empty and hidden: the caller must still mark it unavailable
+    // rather than invent a crop.
+    const result = resolveFormBox(
+      { ownRect: box(10, 10, 0, 0), childBoxes: [], controlBoxes: [] },
+      PAGE,
+      MIN
+    );
+
+    expect(result.measuredFrom).toBe('form');
+    expect(result.rect).toEqual(box(10, 10, 0, 0));
+  });
+
+  it('ignores zero-size children when taking the union', async () => {
+    const { resolveFormBox } = await import('../../server/lib/visuals/captureFormVisuals.js');
+
+    const result = resolveFormBox(
+      {
+        ownRect: box(0, 0, 0, 0),
+        childBoxes: [box(0, 0, 0, 0), box(200, 300, 100, 100), null]
+      },
+      PAGE,
+      MIN
+    );
+
+    // A collapsed child at the origin would otherwise drag the crop to 0,0.
+    expect(result.rect).toEqual(box(200, 300, 100, 100));
+  });
+
+  it('clamps an inferred box to the page, since a clip outside it fails', async () => {
+    const { resolveFormBox } = await import('../../server/lib/visuals/captureFormVisuals.js');
+
+    const result = resolveFormBox(
+      { ownRect: box(0, 0, 0, 0), childBoxes: [box(-50, 100, 2000, 500)] },
+      PAGE,
+      MIN
+    );
+
+    expect(result.rect.x).toBe(0);
+    expect(result.rect.width).toBe(PAGE.width);
+  });
+});
+
+describe('toFormGeometry', () => {
+  const PAGE = { width: 1280, height: 4000 };
+
+  it('rebases control coordinates onto the inferred crop', async () => {
+    const { toFormGeometry } = await import('../../server/lib/visuals/captureFormVisuals.js');
+
+    const result = toFormGeometry(
+      {
+        formIndex: 0,
+        signature: { id: '', name: '', action: '', fieldCount: 1 },
+        ownRect: { x: 0, y: 0, width: 0, height: 0 },
+        childBoxes: [{ x: 100, y: 200, width: 400, height: 300 }],
+        controls: [
+          { name: 'email', id: '', type: 'email', tagName: 'input', value: '', box: { x: 150, y: 250, width: 200, height: 30 } }
+        ]
+      },
+      PAGE,
+      8
+    );
+
+    expect(result.visible).toBe(true);
+    expect(result.measuredFrom).toBe('children');
+    // The overlay scales these against the crop, so they must be relative to
+    // the inferred origin, not the page.
+    expect(result.fields[0].rect).toEqual({ x: 50, y: 50, width: 200, height: 30 });
+  });
+
+  it('marks a form unmeasurable rather than inventing a crop', async () => {
+    const { toFormGeometry } = await import('../../server/lib/visuals/captureFormVisuals.js');
+
+    const result = toFormGeometry(
+      {
+        formIndex: 0,
+        signature: { id: '', name: '', action: '', fieldCount: 0 },
+        ownRect: { x: 0, y: 0, width: 0, height: 0 },
+        childBoxes: [],
+        controls: []
+      },
+      PAGE,
+      8
+    );
+
+    expect(result.visible).toBe(false);
+    expect(result.fields).toEqual([]);
+  });
+
+  it('passes an already-resolved entry through untouched', async () => {
+    const { toFormGeometry } = await import('../../server/lib/visuals/captureFormVisuals.js');
+
+    const resolved = {
+      formIndex: 2,
+      rect: { x: 1, y: 2, width: 300, height: 400 },
+      fields: [{ name: 'a', rect: { x: 0, y: 0, width: 10, height: 10 }, renderable: true }],
+      visible: true
+    };
+
+    expect(toFormGeometry(resolved, PAGE, 8)).toMatchObject(resolved);
+  });
+});

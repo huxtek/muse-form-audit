@@ -159,6 +159,12 @@ export interface FormVisual {
   truncated?: boolean;
   /** True for the bundled Dev Mode wireframe rather than a real capture. */
   isSample?: boolean;
+  /**
+   * Present when the form's own box was unusable (`display: contents` gives a
+   * 0x0 rect) and its contents were measured instead, so the crop may sit
+   * slightly tighter than the form a person sees.
+   */
+  measuredFrom?: 'children' | 'fields';
   unavailableReason?: string;
 }
 

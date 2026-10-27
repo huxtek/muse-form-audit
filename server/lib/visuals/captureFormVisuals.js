@@ -40,6 +40,111 @@ export const VISUAL_LIMITS = {
 };
 
 /**
+ * Decides which box to crop for one form, and rebases its controls onto it.
+ *
+ * Split out of the browser callback so it can be tested: jsdom has no layout
+ * engine, so exercising this through a real DOM is not an option. The browser
+ * side only reads raw boxes; every judgement happens here.
+ *
+ * A form styled `display: contents` generates no box of its own, so its rect
+ * is 0x0 however long we wait for the page to settle. Its children still lay
+ * out normally, so their extent is the crop a reader actually wants. Direct
+ * children are preferred over the controls alone because they carry the
+ * labels and legends too; cropping to the inputs would cut the text that
+ * explains them.
+ *
+ * This only ever replaces a measurement too small to use, so a form that
+ * really is tiny is still reported as the page described it.
+ */
+export function resolveFormBox({ ownRect, childBoxes = [], controlBoxes = [] }, pageSize, minSize) {
+  const union = (boxes) => {
+    const usable = boxes.filter((b) => b && b.width >= 1 && b.height >= 1);
+
+    if (!usable.length) {
+      return null;
+    }
+
+    const x = Math.min(...usable.map((b) => b.x));
+    const y = Math.min(...usable.map((b) => b.y));
+
+    return {
+      x,
+      y,
+      width: Math.max(...usable.map((b) => b.x + b.width)) - x,
+      height: Math.max(...usable.map((b) => b.y + b.height)) - y
+    };
+  };
+
+  const degenerate = !ownRect || ownRect.width < minSize || ownRect.height < minSize;
+  const fromChildren = degenerate ? union(childBoxes) : null;
+  const fromFields = degenerate && !fromChildren ? union(controlBoxes) : null;
+  const inferred = fromChildren ?? fromFields;
+
+  if (!inferred) {
+    return { rect: ownRect, measuredFrom: 'form' };
+  }
+
+  // An inferred box can overhang the document when something inside overflows,
+  // and a clip outside the page fails.
+  const x = Math.max(0, inferred.x);
+  const y = Math.max(0, inferred.y);
+  const limitWidth = pageSize?.width ? Math.max(0, pageSize.width - x) : inferred.width;
+  const limitHeight = pageSize?.height ? Math.max(0, pageSize.height - y) : inferred.height;
+
+  return {
+    rect: {
+      x,
+      y,
+      width: Math.min(inferred.width, limitWidth),
+      height: Math.min(inferred.height, limitHeight)
+    },
+    measuredFrom: fromChildren ? 'children' : 'fields'
+  };
+}
+
+/** Turns one raw form measurement into the shape the capture step consumes. */
+export function toFormGeometry(raw, pageSize, minSize) {
+  // Already resolved, by an older page script or a caller passing geometry
+  // straight in. Converting it again would discard the rect it arrived with.
+  if (!raw?.ownRect && raw?.rect) {
+    return { measuredFrom: 'form', ...raw };
+  }
+
+  const { rect, measuredFrom } = resolveFormBox(raw ?? {}, pageSize, minSize);
+  const box = rect ?? { x: 0, y: 0, width: 0, height: 0 };
+
+  return {
+    formIndex: raw.formIndex,
+    signature: raw.signature,
+    visible: box.width >= minSize && box.height >= minSize,
+    /** 'form', or which descendants stood in for an unusable form box. */
+    measuredFrom,
+    rect: {
+      x: Math.round(box.x),
+      y: Math.round(box.y),
+      width: Math.round(box.width),
+      height: Math.round(box.height)
+    },
+    fields: (raw.controls ?? []).map((control) => ({
+      name: control.name ?? '',
+      id: control.id ?? '',
+      type: control.type ?? '',
+      tagName: control.tagName ?? '',
+      value: control.value ?? '',
+      // Relative to the form crop.
+      rect: {
+        x: Math.round(control.box.x - box.x),
+        y: Math.round(control.box.y - box.y),
+        width: Math.round(control.box.width),
+        height: Math.round(control.box.height)
+      },
+      // Only controls we can actually point at are collected.
+      renderable: true
+    }))
+  };
+}
+
+/**
  * Reads form and field geometry from the page. Pure DOM work, no screenshots.
  * Exported for testing against a fake page object.
  */
@@ -55,39 +160,25 @@ export async function readFormGeometry(page, limits = VISUAL_LIMITS) {
         height: Math.max(document.documentElement.scrollHeight, window.innerHeight)
       };
 
+      // Page-absolute box for an element, or null when it generates none.
+      // getBoundingClientRect is viewport-relative, hence the scroll offset.
+      const boxOf = (el) => {
+        const rect = el.getBoundingClientRect();
+
+        return rect.width >= 1 && rect.height >= 1
+          ? {
+              x: rect.left + window.scrollX,
+              y: rect.top + window.scrollY,
+              width: rect.width,
+              height: rect.height
+            }
+          : null;
+      };
+
+      // Raw boxes only. Every judgement about which box to crop happens in
+      // node, where it can be tested without a layout engine.
       const measured = forms.map((form, formIndex) => {
         const formRect = form.getBoundingClientRect();
-        // getBoundingClientRect is viewport-relative; make it page-absolute.
-        const pageX = formRect.left + window.scrollX;
-        const pageY = formRect.top + window.scrollY;
-
-        const visible = formRect.width >= minSize && formRect.height >= minSize;
-
-        const fields = Array.from(form.querySelectorAll(fieldSelector))
-          .map((el) => {
-            const rect = el.getBoundingClientRect();
-            const name = el.getAttribute('name') || '';
-            const id = el.getAttribute('id') || '';
-
-            return {
-              name,
-              id,
-              type: (el.getAttribute('type') || el.tagName).toLowerCase(),
-              tagName: el.tagName.toLowerCase(),
-              value: el.getAttribute('value') || '',
-              // Relative to the form crop.
-              rect: {
-                x: Math.round(rect.left + window.scrollX - pageX),
-                y: Math.round(rect.top + window.scrollY - pageY),
-                width: Math.round(rect.width),
-                height: Math.round(rect.height)
-              },
-              // A zero-size control is hidden or collapsed: no box to draw.
-              renderable: rect.width >= 1 && rect.height >= 1
-            };
-          })
-          // Keep only controls we can actually point at.
-          .filter((field) => field.renderable);
 
         return {
           formIndex,
@@ -97,14 +188,24 @@ export async function readFormGeometry(page, limits = VISUAL_LIMITS) {
             action: form.getAttribute('action') || '',
             fieldCount: form.querySelectorAll(fieldSelector).length
           },
-          visible,
-          rect: {
-            x: Math.round(pageX),
-            y: Math.round(pageY),
-            width: Math.round(formRect.width),
-            height: Math.round(formRect.height)
+          ownRect: {
+            x: formRect.left + window.scrollX,
+            y: formRect.top + window.scrollY,
+            width: formRect.width,
+            height: formRect.height
           },
-          fields
+          childBoxes: Array.from(form.children).map(boxOf).filter(Boolean),
+          controls: Array.from(form.querySelectorAll(fieldSelector))
+            .map((el) => ({
+              name: el.getAttribute('name') || '',
+              id: el.getAttribute('id') || '',
+              type: (el.getAttribute('type') || el.tagName).toLowerCase(),
+              tagName: el.tagName.toLowerCase(),
+              value: el.getAttribute('value') || '',
+              box: boxOf(el)
+            }))
+            // Keep only controls we can actually point at.
+            .filter((control) => control.box)
         };
       });
 
@@ -116,13 +217,13 @@ export async function readFormGeometry(page, limits = VISUAL_LIMITS) {
   );
 
   // Tolerate an older/odd return shape rather than throwing on a page quirk.
-  if (Array.isArray(result)) {
-    return { pageSize: { width: 0, height: 0 }, forms: result };
-  }
+  const isBare = Array.isArray(result);
+  const rawForms = isBare ? result : Array.isArray(result?.forms) ? result.forms : [];
+  const pageSize = (isBare ? null : result?.pageSize) ?? { width: 0, height: 0 };
 
   return {
-    pageSize: result?.pageSize ?? { width: 0, height: 0 },
-    forms: Array.isArray(result?.forms) ? result.forms : []
+    pageSize,
+    forms: rawForms.map((raw) => toFormGeometry(raw, pageSize, limits.minFormSize))
   };
 }
 
@@ -177,6 +278,11 @@ export async function captureFormVisuals(
       formIndex: form.formIndex,
       signature: form.signature,
       fields: form.fields,
+      // 'children' or 'fields' means the form's own box was unusable and its
+      // contents were measured instead, so a slightly tight crop is expected.
+      ...(form.measuredFrom && form.measuredFrom !== 'form'
+        ? { measuredFrom: form.measuredFrom }
+        : {}),
       width: form.rect.width,
       height: form.rect.height,
       // Where the form sits on the page, in page coordinates. This is what
@@ -185,7 +291,14 @@ export async function captureFormVisuals(
     };
 
     if (!form.visible) {
-      visuals.push({ ...base, screenshot: null, unavailableReason: 'form is hidden or has no size' });
+      // Say which of the two it was. "No size" on a form that holds controls
+      // means a layout quirk, not a hidden form, and the distinction is the
+      // difference between a bug report and a shrug.
+      const reason = form.fields?.length
+        ? 'the form element has no box of its own and no measurable contents'
+        : 'form is hidden or has no size';
+
+      visuals.push({ ...base, screenshot: null, unavailableReason: reason });
       continue;
     }
 
