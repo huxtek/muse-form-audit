@@ -35,9 +35,13 @@ export const VISUAL_LIMITS = {
   padding: Number(process.env.VISUAL_CAPTURE_PADDING || 16),
   /**
    * The whole-page map is a navigation aid, not evidence, so it is JPEG --
-   * roughly a tenth the size of the equivalent PNG. Form crops stay lossless.
+   * a fraction the size of the equivalent PNG. Form crops stay lossless.
+   *
+   * Not as low as it was: the map is now shown at full width and can be
+   * opened full-screen, so compression artifacts around small page text are
+   * actually looked at rather than lost in a thumbnail.
    */
-  pageMapQuality: Number(process.env.VISUAL_PAGE_MAP_QUALITY || 70),
+  pageMapQuality: Number(process.env.VISUAL_PAGE_MAP_QUALITY || 85),
   maxPageMapHeight: Number(process.env.VISUAL_MAX_PAGE_MAP_HEIGHT || 8000),
   /**
    * How tall the viewport may grow to bring a whole page into one frame.

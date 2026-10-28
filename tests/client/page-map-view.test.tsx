@@ -158,7 +158,9 @@ describe('PageMapView', () => {
     loadMap();
     fireEvent.click(regions()[1]);
 
-    expect(onSelect).toHaveBeenCalledWith(1);
+    // Inline, choosing a region should also take the user to the findings:
+    // changing something below the fold reads as nothing having happened.
+    expect(onSelect).toHaveBeenCalledWith(1, { reveal: true });
   });
 
   it('labels a region with its finding count', () => {
@@ -221,5 +223,114 @@ describe('PageMapView', () => {
     render(<PageMapView forms={forms} jobId="job-1" selectedIndex={0} onSelect={() => {}} />);
 
     expect(screen.getByText(/map cropped/i)).toBeInTheDocument();
+  });
+});
+
+describe('PageMapView sizing', () => {
+  it('fits the container width rather than capping the height', () => {
+    // Capping the height is what rendered a 1280x4393 page about 134px
+    // across: too small to read and too small to aim at.
+    const forms = [formOnPage(0, 0, { x: 0, y: 0, width: 100, height: 100 })];
+
+    render(<PageMapView forms={forms} jobId="job-1" selectedIndex={0} onSelect={() => {}} />);
+
+    const img = screen.getByAltText(/scanned page/i);
+    expect(img.className).toContain('w-full');
+    expect(img.className).not.toMatch(/max-h-/);
+  });
+
+  it('names the selected form in the header, so selection is visible', () => {
+    const forms = [
+      formOnPage(0, 0, { x: 0, y: 0, width: 100, height: 100 }),
+      formOnPage(1, 0, { x: 0, y: 200, width: 100, height: 100 })
+    ];
+
+    render(<PageMapView forms={forms} jobId="job-1" selectedIndex={1} onSelect={() => {}} />);
+
+    expect(screen.getByText(/showing/i)).toHaveTextContent('Form 2');
+  });
+});
+
+describe('PageMapView expanded view', () => {
+  const twoForms = () => [
+    formOnPage(0, 0, { x: 0, y: 0, width: 100, height: 100 }),
+    formOnPage(1, 0, { x: 0, y: 200, width: 100, height: 100 })
+  ];
+
+  const expand = () => fireEvent.click(screen.getByRole('button', { name: /expand page/i }));
+
+  /** Both maps are mounted once expanded, so load every one of them. */
+  const loadAllMaps = () => {
+    for (const img of screen.getAllByAltText(/scanned page/i)) {
+      Object.defineProperty(img, 'naturalWidth', { value: PAGE.width, configurable: true });
+      Object.defineProperty(img, 'naturalHeight', { value: PAGE.height, configurable: true });
+      fireEvent.load(img);
+    }
+  };
+
+  it('opens when the image itself is clicked', () => {
+    // Clicking a small screenshot is most people's first instinct; doing
+    // nothing is what made it feel broken.
+    render(
+      <PageMapView forms={twoForms()} jobId="job-1" selectedIndex={0} onSelect={() => {}} />
+    );
+    fireEvent.click(screen.getByAltText(/scanned page/i));
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('opens from the explicit button, for anyone who does not guess', () => {
+    render(
+      <PageMapView forms={twoForms()} jobId="job-1" selectedIndex={0} onSelect={() => {}} />
+    );
+    expand();
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('selects in place without closing, so a click is never jarring', () => {
+    const onSelect = vi.fn();
+    render(
+      <PageMapView forms={twoForms()} jobId="job-1" selectedIndex={0} onSelect={onSelect} />
+    );
+    expand();
+    loadAllMaps();
+
+    // Two maps are mounted once expanded; the dialog's regions come last.
+    const inDialog = regions().slice(-2);
+    fireEvent.click(inDialog[1]);
+
+    expect(onSelect).toHaveBeenCalledWith(1, { reveal: false });
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('leaves via an explicit action that reveals the findings', () => {
+    const onSelect = vi.fn();
+    render(
+      <PageMapView forms={twoForms()} jobId="job-1" selectedIndex={1} onSelect={onSelect} />
+    );
+    expand();
+    fireEvent.click(screen.getByRole('button', { name: /view findings/i }));
+
+    expect(onSelect).toHaveBeenCalledWith(1, { reveal: true });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('honours a selection made in the dialog when it is dismissed instead', () => {
+    const onSelect = vi.fn();
+    render(
+      <PageMapView forms={twoForms()} jobId="job-1" selectedIndex={0} onSelect={onSelect} />
+    );
+    expand();
+    loadAllMaps();
+
+    fireEvent.click(regions().slice(-2)[1]);
+    onSelect.mockClear();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    // The click must not be forgotten just because the dialog was dismissed
+    // rather than confirmed.
+    expect(onSelect).toHaveBeenCalledWith(1, { reveal: true });
   });
 });

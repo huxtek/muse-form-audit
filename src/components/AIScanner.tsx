@@ -91,6 +91,8 @@ export const AIScanner = () => {
   // out of the render cycle, which is also what React's set-state-in-effect
   // rule asks for.
   const wsRef = useRef<WebSocket | null>(null);
+  /** The selected form's detail, scrolled to when a map region is chosen. */
+  const formDetailRef = useRef<HTMLDivElement | null>(null);
   const [perFormProgress, setPerFormProgress] = useState<PerFormProgress>({
     formsFound: 0,
     formsAnalyzed: 0
@@ -184,8 +186,28 @@ export const AIScanner = () => {
     setModelProvider(provider);
   };
 
-  const handleSelectForm = (index: number) => {
+  /**
+   * Selecting a form on the page map used to change something below the fold,
+   * which reads as nothing having happened at all. Bring the detail to the
+   * user instead of leaving them to find it.
+   *
+   * Scrolled on the event rather than from an effect watching the index: the
+   * panel is keyed by form identity and remounts, so this waits a frame for
+   * the new one to lay out.
+   */
+  const handleSelectForm = (index: number, options?: { reveal?: boolean }) => {
     setSelectedFormIndex(index);
+
+    if (options?.reveal) {
+      requestAnimationFrame(() => {
+        const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+        formDetailRef.current?.scrollIntoView({
+          behavior: reduced ? 'auto' : 'smooth',
+          block: 'start'
+        });
+      });
+    }
   };
 
   const startAIScan = async () => {
@@ -393,7 +415,11 @@ export const AIScanner = () => {
             onSelect={handleSelectForm}
           />
 
-          {renderVisualForm(forms[index], index)}
+          {/* Scroll target. On the wrapper, not the panel: the panel remounts
+              when the selection changes, which would drop the ref. */}
+          <div ref={formDetailRef} className="scroll-mt-4">
+            {renderVisualForm(forms[index], index)}
+          </div>
         </div>
       );
     }
