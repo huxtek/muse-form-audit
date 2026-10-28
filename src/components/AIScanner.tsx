@@ -93,6 +93,8 @@ export const AIScanner = () => {
   const wsRef = useRef<WebSocket | null>(null);
   /** The selected form's detail, scrolled to when a map region is chosen. */
   const formDetailRef = useRef<HTMLDivElement | null>(null);
+  /** Validation message for the URL field, shown beside it and announced. */
+  const [urlError, setUrlError] = useState<string | null>(null);
   const [perFormProgress, setPerFormProgress] = useState<PerFormProgress>({
     formsFound: 0,
     formsAnalyzed: 0
@@ -210,8 +212,20 @@ export const AIScanner = () => {
     }
   };
 
+  /**
+   * Submitting the scan form. Exists so Enter in the URL field works, which
+   * it did not when the controls were a div and the button a click handler.
+   */
+  const handleScanSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    startAIScan();
+  };
+
   const startAIScan = async () => {
     if (!url) {
+      // Also written beside the field: a toast is gone before an agent, or a
+      // screen reader user who looked away, can read it.
+      setUrlError('Enter a website URL to start the scan.');
       toast({
         title: "Please enter a URL",
         description: "Enter a website URL to start the AI-driven scan",
@@ -221,6 +235,7 @@ export const AIScanner = () => {
     }
 
     if (!validateUrl(url)) {
+      setUrlError('That does not look like a website URL. Try https://example.com');
       toast({
         title: "Invalid URL",
         description: "Please enter a valid website URL (e.g., https://example.com)",
@@ -228,6 +243,8 @@ export const AIScanner = () => {
       });
       return;
     }
+
+    setUrlError(null);
 
     try {
       const scanResults = await formAPI.startScan({
@@ -580,7 +597,14 @@ export const AIScanner = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
+                {/* A real form, so Enter submits and an agent has a
+                    submission boundary to work with rather than a div and a
+                    click handler. noValidate keeps our own messaging
+                    authoritative: `required` below states the constraint for
+                    anything reading the markup, but letting the browser
+                    enforce type="url" would start rejecting the bare domains
+                    this has always accepted. */}
+                <form className="space-y-6" onSubmit={handleScanSubmit} noValidate>
                   {/* URL Input */}
                   <div className="flex flex-col md:flex-row gap-4">
                     <div className="flex-1 relative">
@@ -588,7 +612,10 @@ export const AIScanner = () => {
                         type="url"
                         placeholder="https://example.com"
                         value={url}
-                        onChange={(e) => setUrl(e.target.value)}
+                        onChange={(e) => {
+                          setUrl(e.target.value);
+                          setUrlError(null);
+                        }}
                         className="h-14 text-lg bg-input/50 border-border/50 focus:border-primary"
                         // AI Agent friendly attributes
                         data-ai-role="website-url-input"
@@ -596,20 +623,34 @@ export const AIScanner = () => {
                         data-ai-expected-format="https://example.com"
                         data-ai-validation="url"
                         aria-label="Website URL for AI form analysis"
-                        aria-describedby="url-input-description"
+                        aria-describedby={
+                          urlError ? 'url-input-error url-input-description' : 'url-input-description'
+                        }
+                        aria-invalid={urlError ? true : undefined}
                         id="muse-form-audit-url-input"
                         name="website-url"
                         autoComplete="url"
+                        required
                       />
                       <div id="url-input-description" className="sr-only">
                         Enter the complete URL of the website you want to analyze for AI agent form compatibility. Include https:// at the beginning.
                       </div>
+
+                      {/* Announced as it appears, and readable after a failed
+                          submit -- a toast is gone before an agent can look. */}
+                      <p
+                        id="url-input-error"
+                        role="alert"
+                        aria-live="polite"
+                        className={`mt-2 text-sm text-left text-destructive ${urlError ? '' : 'sr-only'}`}
+                      >
+                        {urlError ?? ''}
+                      </p>
                     </div>
                     
                     {/* Analysis Button */}
                     <div className="flex justify-center">
                       <Button
-                        onClick={startAIScan}
                         variant="scan"
                         size="xl"
                         className="min-w-[160px]"
@@ -619,7 +660,7 @@ export const AIScanner = () => {
                         data-ai-description="Start AI-powered analysis of website forms for compatibility and accessibility"
                         aria-label="Start AI form analysis"
                         id="muse-form-audit-scan-button"
-                        type="button"
+                        type="submit"
                       >
                         <Scan className="h-5 w-5" />
                         Full AI Scan
@@ -644,14 +685,21 @@ export const AIScanner = () => {
                           </div>
                           
                           <div className="flex-1">
-                            <h3 className="text-base font-semibold text-white mb-1">
-                              Scan entire website
+                            {/* Reflects the state. A fixed "Scan entire
+                                website" heading sat directly above "Analyze
+                                only the provided URL" whenever the switch was
+                                off, which contradicted itself. */}
+                            <h3
+                              id="full-crawl-heading"
+                              className="text-base font-semibold text-white mb-1"
+                            >
+                              {fullCrawl ? 'Scanning entire website' : 'Scanning this page only'}
                             </h3>
-                            
-                            <p className="text-sm text-slate-400">
+
+                            <p id="full-crawl-description" className="text-sm text-slate-400">
                               {fullCrawl
                                 ? "Crawl and analyze all discoverable pages across the entire website"
-                                : "Analyze only the provided URL"
+                                : "Turn this on to crawl every discoverable page instead"
                               }
                             </p>
                           </div>
@@ -659,6 +707,14 @@ export const AIScanner = () => {
                         
                         <Switch
                           id="full-crawl"
+                          // Had no accessible name at all: no aria-label, no
+                          // aria-labelledby, no name, no label[for]. A screen
+                          // reader announced an unnamed switch, and an agent
+                          // had nothing to target it by.
+                          name="full-crawl"
+                          type="button"
+                          aria-labelledby="full-crawl-heading"
+                          aria-describedby="full-crawl-description"
                           checked={fullCrawl}
                           onCheckedChange={handleFullCrawlToggle}
                           className="data-[state=checked]:bg-violet-600 data-[state=unchecked]:bg-slate-600 data-[state=unchecked]:border-slate-500 border-2"
@@ -695,6 +751,11 @@ export const AIScanner = () => {
                             key={provider}
                             type="button"
                             role="radio"
+                            // id and name so an agent can target a specific
+                            // option instead of guessing from text position.
+                            id={`analysis-model-${provider}`}
+                            name="analysis-model"
+                            value={provider}
                             aria-checked={modelProvider === provider}
                             onClick={() => handleModelProviderSelect(provider)}
                             className={`px-4 py-2 text-sm font-medium transition-colors ${
@@ -759,7 +820,7 @@ export const AIScanner = () => {
                       )}
                     </div>
                   </div>
-                </div>
+                </form>
               </CardContent>
             </Card>
           )}

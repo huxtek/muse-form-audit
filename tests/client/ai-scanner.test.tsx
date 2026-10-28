@@ -210,3 +210,118 @@ describe('AIScanner input validation', () => {
     expect(startScanMock).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * Our own interface scored 42/100 against our own analyser, so these pin the
+ * things that audit found. An AI-agent form auditor whose own controls are a
+ * div with a click handler is the one bug we cannot ship.
+ */
+describe('AIScanner own-form compatibility', () => {
+  const renderScanner = () =>
+    render(
+      <DevModeProvider>
+        <AIScanner />
+      </DevModeProvider>
+    );
+
+  const urlField = () => screen.getByLabelText('Website URL for AI form analysis');
+
+  it('submits on Enter in the URL field', async () => {
+    // Enter did nothing at all before: no form element, and the trigger was a
+    // click handler on a type="button". For a single-field box that looks like
+    // a search input, Enter is the reflex.
+    startScanMock.mockResolvedValue({ jobId: 'job-1' });
+    renderScanner();
+
+    fireEvent.change(urlField(), { target: { value: 'https://example.com' } });
+
+    await act(async () => {
+      fireEvent.submit(urlField().closest('form')!);
+    });
+
+    expect(startScanMock).toHaveBeenCalled();
+  });
+
+  it('puts the controls in a real form with a submit button', async () => {
+    renderScanner();
+
+    const form = urlField().closest('form');
+    expect(form).not.toBeNull();
+
+    // An agent needs a submission boundary, not a div it has to infer one from.
+    const submit = screen.getByRole('button', { name: 'Start AI form analysis' });
+    expect(submit).toHaveAttribute('type', 'submit');
+    expect(form).toContainElement(submit);
+  });
+
+  it('states the URL constraint in the markup', async () => {
+    renderScanner();
+
+    expect(urlField()).toBeRequired();
+    expect(urlField()).toHaveAttribute('name', 'website-url');
+  });
+
+  it('writes a validation error beside the field, not only in a toast', async () => {
+    renderScanner();
+
+    await act(async () => {
+      fireEvent.submit(urlField().closest('form')!);
+    });
+
+    // A toast is gone before an agent, or a screen reader user who looked
+    // away, can read it.
+    const error = screen.getByRole('alert');
+    expect(error).toHaveTextContent(/enter a website url/i);
+    expect(urlField()).toHaveAttribute('aria-invalid', 'true');
+    expect(urlField().getAttribute('aria-describedby')).toContain('url-input-error');
+  });
+
+  it('clears the error once the field is edited', async () => {
+    renderScanner();
+
+    await act(async () => {
+      fireEvent.submit(urlField().closest('form')!);
+    });
+    fireEvent.change(urlField(), { target: { value: 'https://example.com' } });
+
+    expect(urlField()).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('gives the crawl switch an accessible name and a name attribute', async () => {
+    renderScanner();
+
+    // It had neither: a screen reader announced an unnamed switch, and an
+    // agent had nothing to target it by.
+    const toggle = screen.getByRole('switch');
+    expect(toggle).toHaveAccessibleName(/scanning this page only/i);
+
+    // Radix puts the name on a hidden input rather than the switch button,
+    // which is the control that actually carries the value into the submit --
+    // so the form really does send a full-crawl value now.
+    const carrier = urlField().closest('form')!.querySelector('input[name="full-crawl"]');
+    expect(carrier).not.toBeNull();
+  });
+
+  it('describes the crawl scope without contradicting itself', async () => {
+    renderScanner();
+
+    // "Scan entire website" used to sit directly above "Analyze only the
+    // provided URL" whenever the switch was off.
+    expect(screen.getByRole('switch')).not.toBeChecked();
+    expect(screen.getByText(/scanning this page only/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^Scan entire website$/)).not.toBeInTheDocument();
+  });
+
+  it('gives every analysis-model option a targetable id and name', async () => {
+    renderScanner();
+
+    const options = screen.getAllByRole('radio');
+    expect(options.length).toBeGreaterThan(1);
+
+    for (const option of options) {
+      // Targetable by attribute rather than only by text and position.
+      expect(option.getAttribute('id')).toMatch(/^analysis-model-/);
+      expect(option).toHaveAttribute('name', 'analysis-model');
+    }
+  });
+});
