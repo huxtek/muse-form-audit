@@ -423,3 +423,62 @@ describe('AIScanner landing page', () => {
     expect(submit).not.toHaveTextContent(/full/i);
   });
 });
+
+describe('AIScanner sample report', () => {
+  const renderScanner = () =>
+    render(
+      <DevModeProvider>
+        <AIScanner />
+      </DevModeProvider>
+    );
+
+  const sampleButton = () => screen.getByRole('button', { name: /sample report/i });
+
+  it('runs without a URL, which is the whole point', async () => {
+    // Understanding the tool used to cost a URL and, for a real scan, API
+    // keys -- so a visitor had to commit before seeing what an audit is.
+    startScanMock.mockResolvedValue({ jobId: 'job-1' });
+    renderScanner();
+
+    await act(async () => {
+      fireEvent.click(sampleButton());
+    });
+
+    expect(startScanMock).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'https://example.com', devMode: true })
+    );
+  });
+
+  it('asks for mock data explicitly rather than flipping the header toggle', async () => {
+    // Forcing devMode in the request keeps the visitor in the mode they
+    // arrived in, and works on a deployed build where Dev Mode is off.
+    startScanMock.mockResolvedValue({ jobId: 'job-1' });
+    renderScanner();
+
+    await act(async () => {
+      fireEvent.click(sampleButton());
+    });
+
+    expect(startScanMock.mock.calls[0][0].devMode).toBe(true);
+  });
+
+  it('never submits the form', async () => {
+    renderScanner();
+
+    // A submit-type button here would run a real scan on whatever was typed.
+    expect(sampleButton()).toHaveAttribute('type', 'button');
+  });
+
+  it('shows the sample URL in the field, so the result is not unexplained', async () => {
+    startScanMock.mockResolvedValue({ jobId: 'job-1' });
+    renderScanner();
+
+    await act(async () => {
+      fireEvent.click(sampleButton());
+    });
+
+    expect(screen.getByLabelText('Website URL for AI form analysis')).toHaveValue(
+      'https://example.com'
+    );
+  });
+});

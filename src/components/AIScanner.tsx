@@ -42,6 +42,13 @@ const RESULT_TABS = {
  */
 const STACKED_FORM_LIMIT = 3;
 
+/**
+ * Target for the sample report. The fixtures rewrite their own host to
+ * whatever is submitted, and example.com is reserved for exactly this, so
+ * nothing in the sample output points at a real site.
+ */
+const SAMPLE_REPORT_URL = 'https://example.com';
+
 interface ScanJob {
   id: string;
   url: string;
@@ -81,7 +88,9 @@ interface PerFormProgress {
 const createImmediateScanId = () => `scan-${Date.now()}`;
 
 export const AIScanner = () => {
-  const [url, setUrl] = useState("");
+  // Named apart from the local `url` inside startAIScan, which shadows it
+  // when the sample report supplies its own target.
+  const [urlFromState, setUrl] = useState("");
   const [fullCrawl, setFullCrawl] = useState(false); // Default OFF as requested
   const [modelProvider, setModelProvider] = useState<ModelProvider>(DEFAULT_MODEL_PROVIDER);
   // Which form the visual tab is showing when there are too many to stack.
@@ -222,7 +231,28 @@ export const AIScanner = () => {
     startAIScan();
   };
 
-  const startAIScan = async () => {
+  /**
+   * Runs the bundled sample report.
+   *
+   * Understanding this tool used to cost a URL and, for a real scan, API
+   * keys -- so a visitor had to commit before they could see what an audit
+   * even looks like. The fixtures that make Dev Mode work answer that in a
+   * click, and the results carry their own "sample output, not a real scan"
+   * banners, so nothing here can be mistaken for an audit of a real site.
+   *
+   * Passes devMode explicitly rather than flipping the header toggle: the
+   * visitor should not be left in a different mode than they arrived in.
+   */
+  const showSampleReport = () => {
+    setUrl(SAMPLE_REPORT_URL);
+    setUrlError(null);
+    startAIScan({ url: SAMPLE_REPORT_URL, devMode: true });
+  };
+
+  const startAIScan = async (overrides?: { url?: string; devMode?: boolean }) => {
+    const url = overrides?.url ?? urlFromState;
+    const devMode = overrides?.devMode ?? isDevMode;
+
     if (!url) {
       // Also written beside the field: a toast is gone before an agent, or a
       // screen reader user who looked away, can read it.
@@ -251,7 +281,7 @@ export const AIScanner = () => {
       const scanResults = await formAPI.startScan({
         url,
         fullCrawl, // Pass the crawling mode to the backend
-        devMode: isDevMode, // Pass dev mode state to backend
+        devMode, // Header toggle, or forced on by the sample report
         modelProvider // Which model should run the analysis
       });
       
@@ -634,7 +664,7 @@ export const AIScanner = () => {
                       <Input
                         type="url"
                         placeholder="https://example.com"
-                        value={url}
+                        value={urlFromState}
                         onChange={(e) => {
                           setUrl(e.target.value);
                           setUrlError(null);
@@ -857,6 +887,17 @@ export const AIScanner = () => {
                   </fieldset>
                     </div>
                   </details>
+
+                  {/* The comprehension shortcut: understanding this tool
+                      used to cost a URL and, for a real scan, API keys.
+                      type="button" so it never submits the form. */}
+                  <button
+                    type="button"
+                    onClick={showSampleReport}
+                    className="text-sm font-medium text-sky-400 hover:text-sky-300 underline-offset-4 hover:underline"
+                  >
+                    Or see a sample report &mdash; no URL needed
+                  </button>
 
                   {/* Dev Mode lives in the header, outside this form, so a
                       native submit would otherwise silently lose it and run
