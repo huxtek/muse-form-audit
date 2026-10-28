@@ -230,16 +230,366 @@
           "analysisTimestamp": "2025-08-11T19:27:33.604Z",
           "comprehensiveAnalysis": true
         }
+      },
+      {
+        "formId": "form-signin",
+        "url": "https://skyline-air.example/",
+        "characteristics": {
+          "hasCaptcha": false,
+          "hasFileUpload": false,
+          "hasMultiStep": false,
+          "hasValidation": false,
+          "isLoginForm": true,
+          "isContactForm": false,
+          "isSearchForm": false
+        },
+        "fields": [
+          {
+            "id": "",
+            "name": "",
+            "type": "text",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Username",
+            "options": []
+          },
+          {
+            "id": "",
+            "name": "",
+            "type": "password",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Password",
+            "options": []
+          },
+          {
+            "id": "",
+            "name": "",
+            "type": "checkbox",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Remember me",
+            "options": []
+          },
+          {
+            "id": "",
+            "name": "",
+            "type": "submit",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          }
+        ],
+        "accessibility": {
+          "score": 34,
+          "issues": [
+            "No name attributes on any control, so an agent cannot target or submit this form",
+            "Password field has no autocomplete token, so a credential manager cannot fill it",
+            "Submit control is a div with a click handler rather than a button",
+            "No validation or error messaging an agent could read after a failed sign-in"
+          ],
+          "recommendations": [
+            "Add name=\"username\" and name=\"password\" to the two inputs",
+            "Set autocomplete=\"username\" and autocomplete=\"current-password\"",
+            "Replace the clickable div with <button type=\"submit\">",
+            "Expose sign-in failures through an element an agent can read"
+          ],
+          "categories": {
+            "structural": {
+              "score": 6,
+              "maxScore": 15,
+              "issues": [
+                "Controls are not wrapped in a form element"
+              ]
+            },
+            "identification": {
+              "score": 2,
+              "maxScore": 20,
+              "issues": [
+                "No name or id on any control"
+              ]
+            },
+            "labeling": {
+              "score": 7,
+              "maxScore": 15,
+              "issues": [
+                "Labels sit beside inputs but are not associated"
+              ]
+            },
+            "inputHints": {
+              "score": 1,
+              "maxScore": 10,
+              "issues": [
+                "No autocomplete tokens"
+              ]
+            },
+            "dataTypes": {
+              "score": 8,
+              "maxScore": 15,
+              "issues": []
+            },
+            "validation": {
+              "score": 2,
+              "maxScore": 10,
+              "issues": [
+                "No discoverable validation"
+              ]
+            },
+            "submission": {
+              "score": 6,
+              "maxScore": 10,
+              "issues": [
+                "Submit is not a real button"
+              ]
+            },
+            "accessibility": {
+              "score": 2,
+              "maxScore": 5,
+              "issues": [
+                "No aria state on the remember-me control"
+              ]
+            }
+          },
+          "aiAccessibility": {
+            "hasLabels": false,
+            "hasAriaLabels": false,
+            "hasNameAttributes": false,
+            "hasValidation": false,
+            "hasCaptcha": false,
+            "hasFileUpload": false,
+            "hasProperStructure": false,
+            "hasAutocomplete": false,
+            "hasDataTypes": true
+          },
+          "fieldAnalysis": [],
+          "fieldIssues": [
+            {
+              "field": "fullName",
+              "severity": "high",
+              "issue": "No name attribute, so an agent has nothing stable to target this control by."
+            },
+            {
+              "field": "emailAddress",
+              "severity": "high",
+              "issue": "No autocomplete=\"username\", so a credential manager cannot recognise the field."
+            },
+            {
+              "field": "submitRequest",
+              "severity": "medium",
+              "issue": "Styled like a button but rendered as a div, so an agent cannot be sure it submits."
+            },
+            {
+              "field": "message",
+              "severity": "low",
+              "issue": "Named in the analysis but not present in the capture, so it has no box to draw."
+            }
+          ],
+          "formFindings": [
+            {
+              "severity": "high",
+              "issue": "The controls sit in a row with no form element around them, so an agent has no submission boundary to work with."
+            }
+          ],
+          "narrative": "An agent can see the two inputs but has no stable way to address them and no real submit control to press.",
+          "analysisSource": "model",
+          "visionUsed": true
+        },
+        "metadata": {
+          "fieldCount": 4,
+          "hasRequiredFields": true,
+          "hasLabels": false,
+          "hasValidation": false,
+          "hasCaptcha": false,
+          "hasFileUpload": false,
+          "analysisTimestamp": "2025-08-11T19:27:33.604Z",
+          "comprehensiveAnalysis": true
+        }
+      },
+      {
+        "formId": "form-newsletter",
+        "url": "https://skyline-air.example/",
+        "characteristics": {
+          "hasCaptcha": false,
+          "hasFileUpload": false,
+          "hasMultiStep": false,
+          "hasValidation": true,
+          "isLoginForm": false,
+          "isContactForm": true,
+          "isSearchForm": false
+        },
+        "fields": [
+          {
+            "id": "subscriberEmail",
+            "name": "subscriberEmail",
+            "type": "email",
+            "placeholder": "",
+            "required": true,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Email address",
+            "options": []
+          },
+          {
+            "id": "subscriberName",
+            "name": "subscriberName",
+            "type": "text",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "First name",
+            "options": []
+          },
+          {
+            "id": "travelInterest",
+            "name": "travelInterest",
+            "type": "select",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "Where do you fly from?",
+            "options": []
+          },
+          {
+            "id": "newsletterSubmit",
+            "name": "newsletterSubmit",
+            "type": "submit",
+            "placeholder": "",
+            "required": false,
+            "disabled": false,
+            "value": "",
+            "ariaLabel": "",
+            "label": "",
+            "options": []
+          }
+        ],
+        "accessibility": {
+          "score": 78,
+          "issues": [
+            "Select options carry display text only, with no stable values to choose by",
+            "No maxlength or describedby on the free-text field"
+          ],
+          "recommendations": [
+            "Give each option a value attribute an agent can select by",
+            "Add aria-describedby pointing at the \"we email monthly\" note"
+          ],
+          "categories": {
+            "structural": {
+              "score": 14,
+              "maxScore": 15,
+              "issues": []
+            },
+            "identification": {
+              "score": 18,
+              "maxScore": 20,
+              "issues": []
+            },
+            "labeling": {
+              "score": 13,
+              "maxScore": 15,
+              "issues": []
+            },
+            "inputHints": {
+              "score": 7,
+              "maxScore": 10,
+              "issues": [
+                "No inputmode on the name field"
+              ]
+            },
+            "dataTypes": {
+              "score": 12,
+              "maxScore": 15,
+              "issues": [
+                "Select has no machine-readable values"
+              ]
+            },
+            "validation": {
+              "score": 8,
+              "maxScore": 10,
+              "issues": []
+            },
+            "submission": {
+              "score": 9,
+              "maxScore": 10,
+              "issues": []
+            },
+            "accessibility": {
+              "score": 4,
+              "maxScore": 5,
+              "issues": []
+            }
+          },
+          "aiAccessibility": {
+            "hasLabels": true,
+            "hasAriaLabels": true,
+            "hasNameAttributes": true,
+            "hasValidation": true,
+            "hasCaptcha": false,
+            "hasFileUpload": false,
+            "hasProperStructure": true,
+            "hasAutocomplete": true,
+            "hasDataTypes": true
+          },
+          "fieldAnalysis": [],
+          "fieldIssues": [
+            {
+              "field": "subject",
+              "severity": "low",
+              "issue": "Options carry display text only, so an agent has no stable value to select by."
+            },
+            {
+              "field": "message",
+              "severity": "low",
+              "issue": "No maxlength or describedby hint, so an agent cannot judge how much to write."
+            }
+          ],
+          "formFindings": [
+            {
+              "severity": "low",
+              "issue": "The monthly-email note sits visually under the submit button but comes earlier in the DOM, so an agent reads the caveat before the thing it qualifies."
+            }
+          ],
+          "narrative": "Well built overall: an agent can target and submit this form, and only the select's values and a missing hint hold it back.",
+          "analysisSource": "model",
+          "visionUsed": true
+        },
+        "metadata": {
+          "fieldCount": 4,
+          "hasRequiredFields": true,
+          "hasLabels": true,
+          "hasValidation": true,
+          "hasCaptcha": false,
+          "hasFileUpload": false,
+          "analysisTimestamp": "2025-08-11T19:27:33.604Z",
+          "comprehensiveAnalysis": true
+        }
       }
     ],
     "summary": {
-      "totalForms": 1,
-      "totalFormsFound": 1,
+      "totalForms": 3,
+      "totalFormsFound": 3,
       "totalPages": 1,
       "discoveredUrls": 1,
       "visitedUrls": 1,
       "coveragePercentage": 100,
-      "aiSummary": "Comprehensive per-form analysis of https://skyline-air.example/ completed using 8-category AI compatibility assessment. Successfully analyzed all 1 forms found on the page. Average AI compatibility score: 57/100. AI Compatibility Breakdown: 0/1 forms are AI-friendly (70+ score). 1 forms lack proper labels. 1 forms have validation (good for AI agents). Identified 4 issues with 8 specific recommendations across all forms. All forms have been thoroughly analyzed across structural, identification, labeling, input hints, data types, validation, submission, and accessibility categories.",
+      "aiSummary": "Comprehensive per-form analysis of https://skyline-air.example/ completed using 8-category AI compatibility assessment. Successfully analyzed all 3 forms found on the page. Average AI compatibility score: 56/100. AI Compatibility Breakdown: 1/3 forms are AI-friendly (70+ score). 2 forms lack proper labels. 2 forms have validation (good for AI agents). Identified 10 issues with 14 specific recommendations across all forms. All forms have been thoroughly evaluated for structural clarity, field identification, labelling, input hints, data types, validation, submission and accessibility.",
       "scanMode": "per-form-analysis"
     },
     "metadata": {
@@ -252,14 +602,14 @@
     }
   },
   "error": null,
-  "formsAnalyzed": 1,
-  "formsFound": 1,
+  "formsAnalyzed": 3,
+  "formsFound": 3,
   "timestamp": "2025-08-11T19:27:34.607Z",
   "iteration": 0,
   "maxIterations": 5,
   "jobId": "7f827c69-792c-4968-923c-14691650cccd",
   "type": "form_analyzed",
-  "formsCount": 1,
+  "formsCount": 3,
   "formData": {
     "formId": "form-0",
     "formIndex": 1,

@@ -1022,3 +1022,62 @@ describe('expandViewportToPage', () => {
     expect(page.evaluate).not.toHaveBeenCalled();
   });
 });
+
+describe('single-page mock fixture', () => {
+  const loadFixture = async () => {
+    const { readFileSync } = await import('fs');
+    const { default: path } = await import('path');
+
+    return JSON.parse(
+      readFileSync(path.join(process.cwd(), 'server/mock-data/single-page-response.json'), 'utf8')
+    );
+  };
+
+  it('carries several forms on one sample page', async () => {
+    // With a single form the page map draws one region, so selecting a
+    // different form -- and switching between them in the expanded map --
+    // cannot be exercised without API keys. Dev Mode is the zero-key path
+    // those interactions have to be testable on.
+    const { samplePagePlacement } = await import('../../server/lib/visuals/sampleFormVisual.js');
+    const fixture = await loadFixture();
+    const forms = fixture.results.forms;
+
+    expect(forms.length).toBeGreaterThan(1);
+
+    const pages = forms.map((_, index) => samplePagePlacement(index).pageIndex);
+    const firstPage = pages.filter((pageIndex) => pageIndex === pages[0]).length;
+
+    expect(firstPage).toBeGreaterThan(1);
+  });
+
+  it('gives each form its own findings, so switching visibly changes something', async () => {
+    const fixture = await loadFixture();
+    const counts = fixture.results.forms.map(
+      (form) => form.accessibility?.fieldIssues?.length ?? 0
+    );
+
+    // Identical findings on every form would make selection look broken.
+    expect(new Set(counts).size).toBeGreaterThan(1);
+  });
+
+  it('keeps its own counters in step with the form list', async () => {
+    const fixture = await loadFixture();
+    const count = fixture.results.forms.length;
+
+    expect(fixture.formsFound).toBe(count);
+    expect(fixture.formsAnalyzed).toBe(count);
+    expect(fixture.results.summary.totalForms).toBe(count);
+    expect(fixture.results.summary.totalFormsFound).toBe(count);
+  });
+
+  it('spreads scores so the summary and score strip have something to show', async () => {
+    const fixture = await loadFixture();
+    const scores = fixture.results.forms.map((form) => form.accessibility.score);
+
+    expect(new Set(scores).size).toBe(scores.length);
+    // At least one above the AI-friendly threshold and one well below, so
+    // both branches of the summary prose are exercised.
+    expect(scores.some((score) => score >= 70)).toBe(true);
+    expect(scores.some((score) => score < 50)).toBe(true);
+  });
+});
