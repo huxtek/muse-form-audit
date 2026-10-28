@@ -274,7 +274,22 @@ describe('AIScanner own-form compatibility', () => {
     const error = screen.getByRole('alert');
     expect(error).toHaveTextContent(/enter a website url/i);
     expect(urlField()).toHaveAttribute('aria-invalid', 'true');
-    expect(urlField().getAttribute('aria-describedby')).toContain('url-input-error');
+  });
+
+  it('points at its error region before there is an error to show', async () => {
+    renderScanner();
+
+    // Wiring the region in only once it has content means the association
+    // never existed when assistive tech built its picture of the field, and
+    // an agent re-reading the field after a failure cannot tell which element
+    // holds the message.
+    const describedBy = urlField().getAttribute('aria-describedby');
+    expect(describedBy).toContain('url-input-error');
+    expect(describedBy).toContain('url-input-description');
+
+    // Still no error, so nothing is claimed about validity.
+    expect(urlField()).not.toHaveAttribute('aria-invalid');
+    expect(screen.getByRole('alert')).toHaveTextContent('');
   });
 
   it('clears the error once the field is edited', async () => {
@@ -294,7 +309,9 @@ describe('AIScanner own-form compatibility', () => {
     // It had neither: a screen reader announced an unnamed switch, and an
     // agent had nothing to target it by.
     const toggle = screen.getByRole('switch');
-    expect(toggle).toHaveAccessibleName(/scanning this page only/i);
+    // Names the option, and stays put when toggled: a control that
+    // renames itself as its state changes is announced as its own state.
+    expect(toggle).toHaveAccessibleName(/crawl entire website/i);
 
     expect(toggle).toHaveAttribute('name', 'fullCrawl');
     // One control carries both id and name now, where the Radix switch put
@@ -306,9 +323,10 @@ describe('AIScanner own-form compatibility', () => {
     renderScanner();
 
     // "Scan entire website" used to sit directly above "Analyze only the
-    // provided URL" whenever the switch was off.
+    // provided URL" whenever the switch was off. The heading now names the
+    // option and the description states which way it is set.
     expect(screen.getByRole('switch')).not.toBeChecked();
-    expect(screen.getByText(/scanning this page only/i)).toBeInTheDocument();
+    expect(screen.getByText(/off: analyzing only the URL you provide/i)).toBeInTheDocument();
     expect(screen.queryByText(/^Scan entire website$/)).not.toBeInTheDocument();
   });
 

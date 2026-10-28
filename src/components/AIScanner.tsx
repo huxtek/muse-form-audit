@@ -642,9 +642,17 @@ export const AIScanner = () => {
                         data-ai-description="Enter website URL to analyze forms for AI agent compatibility"
                         data-ai-expected-format="https://example.com"
                         data-ai-validation="url"
-                        aria-describedby={
-                          urlError ? 'url-input-error url-input-description' : 'url-input-description'
-                        }
+                        // Both referenced unconditionally. Wiring the error
+                        // region in only once an error exists means the
+                        // association never existed when assistive tech built
+                        // its picture of the field, and an agent re-reading
+                        // the field after a failure has no way to know which
+                        // element holds the message. An empty region
+                        // contributes nothing to the description, so there is
+                        // no cost to naming it up front.
+                        aria-describedby="url-input-description url-input-error"
+                        // Only ever true when it IS invalid, which is the
+                        // one of the two that should be conditional.
                         aria-invalid={urlError ? true : undefined}
                         id="muse-form-audit-url-input"
                         // Named exactly as /api/scan reads it, so a native
@@ -715,21 +723,25 @@ export const AIScanner = () => {
                           </div>
                           
                           <div className="flex-1">
-                            {/* Reflects the state. A fixed "Scan entire
-                                website" heading sat directly above "Analyze
-                                only the provided URL" whenever the switch was
-                                off, which contradicted itself. */}
+                            {/* Names the option, and does not change with the
+                                state. This heading is the switch's accessible
+                                name, so making it state-dependent -- which it
+                                was, to resolve a contradiction with the text
+                                below -- meant a screen reader announced
+                                "Scanning this page only, switch, off" and the
+                                control renamed itself when toggled. The state
+                                belongs in the description instead. */}
                             <h3
                               id="full-crawl-heading"
                               className="text-base font-semibold text-white mb-1"
                             >
-                              {fullCrawl ? 'Scanning entire website' : 'Scanning this page only'}
+                              Crawl entire website
                             </h3>
 
                             <p id="full-crawl-description" className="text-sm text-slate-400">
                               {fullCrawl
-                                ? "Crawl and analyze all discoverable pages across the entire website"
-                                : "Turn this on to crawl every discoverable page instead"
+                                ? "On: crawling all discoverable pages across the website"
+                                : "Off: analyzing only the URL you provide"
                               }
                             </p>
                           </div>
@@ -824,7 +836,12 @@ export const AIScanner = () => {
                   {/* Dev Mode lives in the header, outside this form, so a
                       native submit would otherwise silently lose it and run
                       a real scan against someone's site. */}
-                  <input type="hidden" name="devMode" value={isDevMode ? 'true' : 'false'} />
+                  <input
+                    type="hidden"
+                    id="devMode"
+                    name="devMode"
+                    value={isDevMode ? 'true' : 'false'}
+                  />
 
                   {/* Description based on mode */}
                   <div className="text-sm space-y-3">
