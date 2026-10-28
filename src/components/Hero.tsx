@@ -16,7 +16,14 @@ import { AIScanner } from "@/components/AIScanner";
  */
 export const Hero = () => {
   return (
-    <div className="min-h-screen relative overflow-hidden">
+    /*
+     * overflow-x-clip, not overflow-hidden. Clipping both axes makes this a
+     * clipping context, which silently disables `position: sticky` on every
+     * descendant -- measured: the report's pinned header scrolled away to
+     * -4776px. Clipping only the horizontal axis still contains the
+     * decorative gradient without taking stickiness with it.
+     */
+    <div className="min-h-screen relative overflow-x-clip">
       <div className="absolute inset-0 bg-gradient-hero" />
 
       <div className="relative z-10 container mx-auto px-4 py-16 md:py-20">

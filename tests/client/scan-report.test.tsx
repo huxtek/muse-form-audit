@@ -52,7 +52,11 @@ const form = (overrides: Partial<AnalyzedForm> = {}): AnalyzedForm => ({
  * way a visitor reaches it. The immediate-results branch is used because it
  * needs no polling.
  */
-const renderReport = async (results: Partial<ScanResults> = {}) => {
+const renderReport = async (
+  // devMode rides on the scan response rather than the results type, and
+  // drives the sample labelling.
+  results: Partial<ScanResults> & { devMode?: boolean } = {}
+) => {
   startScanMock.mockResolvedValue({
     success: true,
     scanType: 'single-page',
@@ -264,15 +268,69 @@ describe('report details tab', () => {
     expect(screen.getByText('One form, mostly fine.')).toBeInTheDocument();
   });
 
-  it('shows the scored breakdown there too', async () => {
+  it('decomposes the score into the categories that produced it', async () => {
     await renderReport({
-      forms: [form({ accessibility: { score: 80, fieldIssues: [] } })]
+      forms: [
+        form({
+          accessibility: {
+            score: 57,
+            fieldIssues: [],
+            categories: {
+              dataTypes: { score: 2, maxScore: 15 },
+              identification: { score: 16, maxScore: 20 }
+            }
+          }
+        })
+      ]
     });
 
     await openDetails();
 
-    expect(screen.getByText(/AI Agent Performance Analysis/i)).toBeInTheDocument();
-    expect(screen.getByText(/Individual Form Analysis/i)).toBeInTheDocument();
+    // Replaces "AI Agent Success Rates", four bars whose values were the one
+    // score minus 10, 5, 0 and 15. These are the real scored categories.
+    expect(screen.getByText('Where the 57 comes from')).toBeInTheDocument();
+    expect(screen.getByText('Data types')).toBeInTheDocument();
+    expect(screen.getByText('2/15')).toBeInTheDocument();
+    expect(screen.getByText('16/20')).toBeInTheDocument();
+  });
+
+  it('puts the biggest loss at the top of the breakdown', async () => {
+    await renderReport({
+      forms: [
+        form({
+          accessibility: {
+            score: 40,
+            fieldIssues: [],
+            categories: {
+              submission: { score: 9, maxScore: 10 },
+              identification: { score: 2, maxScore: 20 }
+            }
+          }
+        })
+      ]
+    });
+
+    await openDetails();
+
+    const labels = screen
+      .getAllByText(/^(Submission|Identification)$/)
+      .map((node) => node.textContent);
+
+    expect(labels).toEqual(['Identification', 'Submission']);
+  });
+
+  it('no longer claims to have measured discovery or data entry', async () => {
+    await renderReport({
+      forms: [form({ accessibility: { score: 80, fieldIssues: [], categories: {} } })]
+    });
+
+    await openDetails();
+
+    // Nothing measured these. They were arithmetic on the one score,
+    // presented as success rates.
+    expect(screen.queryByText(/AI Agent Success Rates/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Form Discovery/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/AI Compatibility Distribution/i)).not.toBeInTheDocument();
   });
 
   it('reads the summary from the top level as well as from summary', async () => {
@@ -344,7 +402,7 @@ describe('report failure surface', () => {
     await renderFailure({ error: 'Navigation timed out' });
 
     expect(screen.queryByRole('button', { name: /download pdf/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /new scan/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /scan another form/i })).toBeInTheDocument();
   });
 });
 
@@ -352,13 +410,13 @@ describe('report actions', () => {
   it('offers the PDF once there are results to put in it', async () => {
     await renderReport();
 
-    expect(screen.getByRole('button', { name: /download pdf report/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /download pdf/i })).toBeInTheDocument();
   });
 
   it('always offers a way to start over', async () => {
     await renderReport();
 
-    expect(screen.getByRole('button', { name: /new scan/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /scan another form/i })).toBeInTheDocument();
   });
 
   it('names the target and the job it ran as', async () => {
@@ -368,5 +426,163 @@ describe('report actions', () => {
 
     expect(within(details).getByText('https://example.com')).toBeInTheDocument();
     expect(screen.getByText('Job ID:')).toBeInTheDocument();
+  });
+});
+
+/**
+ * The report header. Its whole reason for existing is that "New Scan" used to
+ * sit at y=715 inside the progress card on a 3,200px page, so the quickest
+ * way to run another scan was the browser's Back button.
+ */
+describe('report header', () => {
+  it('carries the score and both actions', async () => {
+    await renderReport({
+      forms: [form({ accessibility: { score: 57, fieldIssues: [] } })]
+    });
+
+    expect(screen.getByText('57')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /scan another form/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /download pdf/i })).toBeInTheDocument();
+  });
+
+  it('names the target and what was scanned', async () => {
+    await renderReport({
+      forms: [form(), form({ formId: 'b' })],
+      summary: { totalPages: 1, totalForms: 2 }
+    });
+
+    expect(screen.getByText(/https:\/\/example\.com · 2 forms/)).toBeInTheDocument();
+  });
+
+  it('replaces the progress card rather than sitting under it', async () => {
+    await renderReport();
+
+    // 620px of progress reporting about a finished scan used to come first.
+    expect(screen.queryByText('AI Scan Progress')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Per-Form Analysis Progress/)).not.toBeInTheDocument();
+    expect(screen.getByText('Scan complete')).toBeInTheDocument();
+  });
+
+  it('keeps the job id reachable without spending space on it', async () => {
+    await renderReport();
+
+    // Collapsed into a disclosure rather than deleted: still there for a bug
+    // report, no longer three columns above the results.
+    expect(screen.getByText('Job ID:')).toBeInTheDocument();
+    expect(screen.getByText(/scan details/i)).toBeInTheDocument();
+  });
+
+  it('marks a sample run in the pinned bar', async () => {
+    await renderReport({ devMode: true });
+
+    // The bar is the part most likely to be screenshotted on its own.
+    expect(screen.getAllByText('Sample').length).toBeGreaterThan(0);
+  });
+});
+
+describe('report findings list', () => {
+  const twoForms = [
+    form({
+      accessibility: {
+        score: 57,
+        fieldIssues: [
+          { field: 'fullName', severity: 'high', issue: 'No id and no autocomplete token' },
+          { field: 'phoneNumber', severity: 'low', issue: 'No autocomplete tel' }
+        ],
+        formFindings: [{ severity: 'medium', issue: 'Visual order fights DOM order' }]
+      }
+    }),
+    form({
+      formId: 'form-signin',
+      accessibility: {
+        score: 34,
+        fieldIssues: [{ field: 'password', severity: 'high', issue: 'No autocomplete token' }]
+      }
+    })
+  ];
+
+  it('lists every finding from every form in one place', async () => {
+    await renderReport({ forms: twoForms, summary: { totalPages: 1, totalForms: 2 } });
+
+    await openDetails();
+
+    expect(screen.getByText('4 findings')).toBeInTheDocument();
+    expect(screen.getByText('No id and no autocomplete token')).toBeInTheDocument();
+    expect(screen.getByText('No autocomplete token')).toBeInTheDocument();
+  });
+
+  it('says which form each finding came from', async () => {
+    await renderReport({ forms: twoForms, summary: { totalPages: 1, totalForms: 2 } });
+
+    await openDetails();
+
+    // Flattening must not lose the form, or a finding is unactionable.
+    // Scoped to the row, since the per-form cards below are also headed
+    // "Form 2".
+    const row = screen.getByText('No autocomplete token').closest('li') as HTMLElement;
+
+    expect(within(row).getByText('Form 2')).toBeInTheDocument();
+    expect(within(row).getByText('password')).toBeInTheDocument();
+  });
+
+  it('marks a whole-form finding as having no single control', async () => {
+    await renderReport({ forms: twoForms, summary: { totalPages: 1, totalForms: 2 } });
+
+    await openDetails();
+
+    expect(screen.getByText('Whole form')).toBeInTheDocument();
+  });
+
+  it('narrows to one severity on request', async () => {
+    await renderReport({ forms: twoForms, summary: { totalPages: 1, totalForms: 2 } });
+
+    await openDetails();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /high 2/i }));
+    });
+
+    expect(screen.getByText('No id and no autocomplete token')).toBeInTheDocument();
+    expect(screen.queryByText('No autocomplete tel')).not.toBeInTheDocument();
+  });
+
+  it('reports a clean form as clean rather than as empty', async () => {
+    await renderReport({ forms: [form({ accessibility: { score: 95, fieldIssues: [] } })] });
+
+    await openDetails();
+
+    expect(screen.getByText(/Nothing to fix/)).toBeInTheDocument();
+  });
+});
+
+/**
+ * Guards two layout bugs that only showed up in a browser, both of which made
+ * the pinned header unclickable. jsdom has no layout, so these assert the
+ * classes that carry the decisions rather than the geometry. Brittle by
+ * nature, but the alternative is a button that looks present and cannot be
+ * pressed, which is worse than the buried one it replaced.
+ */
+describe('report header pinning', () => {
+  const stickyBar = () =>
+    screen.getByRole('button', { name: /scan another form/i }).closest('div.sticky');
+
+  it('clears the fixed site header rather than parking behind it', async () => {
+    await renderReport();
+
+    // Measured at top-0: the bar sat at viewport y=18-54 with the 64px fixed
+    // header over it, and elementFromPoint returned the header.
+    expect(stickyBar()).toHaveClass('top-16');
+  });
+
+  it('does not let the sample strip pin on top of it', async () => {
+    await renderReport({ devMode: true });
+
+    // Both pinned at top-16 and the strip won on z-index, swallowing clicks
+    // meant for "Scan another form". The bar's own SAMPLE badge carries the
+    // labelling once the report is up.
+    const strip = screen.getByRole('status');
+
+    expect(strip).not.toHaveClass('sticky');
+    expect(stickyBar()).toHaveClass('sticky');
   });
 });

@@ -30,11 +30,14 @@ import {
 } from "@/defines/modelProviders";
 import { SEVERITY_ORDER, SEVERITY_STYLES } from "@/defines/severities";
 import type { IssueSeverity } from "@/lib/scan-types";
-import { PerformanceDashboard } from "@/components/PerformanceDashboard";
 import FormAnalysisDisplay from "@/components/FormAnalysisDisplay";
 import FormVisualPanel from "@/components/FormVisualPanel";
 import PageMapView from "@/components/PageMapView";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ReportActionBar from "@/components/ReportActionBar";
+import ScoreBreakdown from "@/components/ScoreBreakdown";
+import FindingsList from "@/components/FindingsList";
+import { averageScore } from "@/lib/report-data";
 
 /** Result view tabs. Visual is the default; the written findings sit behind Details. */
 const RESULT_TABS = {
@@ -58,6 +61,16 @@ const STACKED_FORM_LIMIT = 3;
  * would name a real company beside invented scores.
  */
 const SAMPLE_REPORT_URL = 'https://skyline-air.example/';
+
+/**
+ * Statuses after which nothing more will arrive.
+ *
+ * Reaching one of these swaps the progress card for the report header. The
+ * card used to stay put, so a finished scan still opened with 620px of
+ * progress reporting -- a bar at 100%, a per-form progress panel, and a
+ * status badge reading COMPLETED -- before any result.
+ */
+const TERMINAL_STATUSES = ['completed', 'completed_with_errors', 'failed'];
 
 interface ScanJob {
   id: string;
@@ -199,6 +212,19 @@ export const AIScanner = () => {
    * no real site, so both need saying so.
    */
   const isSampleRun = currentJob?.isSampleData === true || currentJob?.devMode === true;
+
+  /**
+   * Nothing more is coming, so the progress card gives way to the report
+   * header. Covers failure as well as success: a failed scan has no progress
+   * left to report either, and still needs a way to start another.
+   *
+   * Checked for truthiness rather than against null, because a poll that
+   * comes back empty writes undefined into the job and `!== null` would let
+   * that straight through to a property read.
+   */
+  const isFinished = Boolean(currentJob) && TERMINAL_STATUSES.includes(currentJob?.status ?? '');
+  const reportForms = currentJob?.results?.forms ?? [];
+  const reportScore = averageScore(reportForms);
   const [perFormProgress, setPerFormProgress] = useState<PerFormProgress>({
     formsFound: 0,
     formsAnalyzed: 0
@@ -856,14 +882,22 @@ export const AIScanner = () => {
       <div>
         <div>
 
-          {/* Sticks below the header for as long as fabricated results are on
-              screen. The cards carry their own banners, but those scroll away
-              and the findings underneath look exactly like a real audit once
-              they do. */}
+          {/* Pins below the header while fabricated results are on screen and
+              nothing else is holding that job. The cards carry their own
+              banners, but those scroll away and the findings underneath look
+              exactly like a real audit once they do.
+
+              It stops pinning once the report header is up, for two reasons.
+              Both pinned at top-16 and collided -- measured: this strip, with
+              the higher z-index, sat on top of the header bar and swallowed
+              clicks meant for "Scan another form". And it would be saying the
+              same thing twice inside 100px, since the bar carries a SAMPLE
+              badge beside the score, which is the better label anyway: a
+              screenshot of it shows the figure and its provenance together. */}
           {isSampleRun && (
             <div
               role="status"
-              className="sticky top-16 z-40 -mx-4 mb-6 flex items-center justify-center gap-2 border-y border-amber-500/40 bg-amber-950/80 px-4 py-2 text-sm text-amber-200 backdrop-blur"
+              className={`${isFinished ? 'relative' : 'sticky top-16'} z-40 -mx-4 mb-6 flex items-center justify-center gap-2 border-y border-amber-500/40 bg-amber-950/80 px-4 py-2 text-sm text-amber-200 backdrop-blur`}
             >
               <FlaskConical className="h-4 w-4 shrink-0" />
               <span>
@@ -1224,8 +1258,84 @@ export const AIScanner = () => {
             </div>
           )}
 
+          {/* The report's own header, pinned. Replaces a "New Scan" button
+              that sat mid-page inside the progress card, far enough down a
+              3,000px report that the Back button was the quicker way to run
+              another scan. */}
+          {isFinished && currentJob && (
+            /*
+             * No wrapper around this block. A sticky element only sticks
+             * within its own parent's box, and a wrapper sized to the header
+             * gave it a 141px travel before it scrolled away with the rest.
+             * Its parent has to be the element that spans the whole report.
+             */
+            <>
+              <ReportActionBar
+                score={reportScore}
+                url={currentJob.url}
+                formCount={reportForms.length}
+                modelLabel={currentJob.modelLabel}
+                isSampleRun={isSampleRun}
+                onDownload={currentJob.results ? downloadReport : undefined}
+                onNewScan={resetScan}
+              />
+
+              {/* What the progress card is worth once it has nothing left to
+                  report: one line, expandable for the job id and the step it
+                  finished on. */}
+              <details className="mb-6 rounded-lg border border-border/40 bg-muted/20 px-4 py-2.5">
+                <summary className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground cursor-pointer list-none">
+                  {getStatusIcon(currentJob.status)}
+                  <span className="text-foreground font-medium">
+                    {currentJob.status === 'failed' ? 'Scan failed' : 'Scan complete'}
+                  </span>
+                  <span>&middot;</span>
+                  <span>{currentJob.modelLabel ?? 'Unknown model'}</span>
+                  {currentJob.model && <span>&middot; {currentJob.model}</span>}
+                  {currentJob.devMode && (
+                    <Badge variant="secondary" className="text-[10px]">
+                      <FlaskConical className="h-3 w-3 mr-1" />
+                      Mock Data
+                    </Badge>
+                  )}
+                  <span className="ml-auto underline">scan details</span>
+                </summary>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs mt-3 pt-3 border-t border-border/40">
+                  <div>
+                    <span className="text-muted-foreground">Target URL:</span>
+                    <div className="font-medium truncate">{currentJob.url}</div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Job ID:</span>
+                    <div className="font-mono">{currentJob.id}</div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Started:</span>
+                    <div className="font-medium">
+                      {new Date(currentJob.createdAt).toLocaleTimeString()}
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              {currentJob.error && (
+                <div className="bg-destructive/10 p-4 rounded-lg border border-destructive/30 text-left mb-6">
+                  <h4 className="font-semibold text-destructive mb-2">Scan failed</h4>
+                  <p className="text-destructive text-sm">{currentJob.error}</p>
+                  {!currentJob.devMode && (
+                    <p className="text-muted-foreground text-xs mt-3">
+                      No API keys yet? Switch the header toggle to Dev Mode to walk the
+                      entire flow on sample data &mdash; no keys required.
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
           {/* Scan Progress */}
-          {currentJob && (
+          {currentJob && !isFinished && (
             <Card className="bg-card/50 backdrop-blur-sm border-border/50 shadow-glow mb-12 max-w-4xl mx-auto">
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
@@ -1413,8 +1523,14 @@ export const AIScanner = () => {
                     {renderVisualTab()}
                   </TabsContent>
 
+                  {/* Score, then what to do about it, then the reference
+                      detail. The dashboard that used to open this tab stated
+                      the same figure three more ways and fabricated four
+                      metrics to fill the space. */}
                   <TabsContent value={RESULT_TABS.DETAILS} className="mt-4 space-y-6">
-                    <PerformanceDashboard results={currentJob.results} />
+                    <ScoreBreakdown forms={reportForms} score={reportScore} />
+
+                    <FindingsList forms={reportForms} />
 
                     <FormAnalysisDisplay
                       forms={currentJob.results.forms || []}

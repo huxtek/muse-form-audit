@@ -223,32 +223,13 @@ const FormAnalysisDisplay: React.FC<FormAnalysisDisplayProps> = ({
                         />
                       </div>
 
-                      {/* Category Scores */}
-                      {form.accessibility.categories && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {Object.entries(form.accessibility.categories).map(([category, data]) => (
-                            <div key={category} className="space-y-2">
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium capitalize">
-                                  {category.replace(/([A-Z])/g, ' $1')}
-                                </span>
-                                <span className={`text-sm font-bold ${getScoreColor(data.score, data.maxScore)}`}>
-                                  {data.score || 0}/{data.maxScore || 0}
-                                </span>
-                              </div>
-                              <Progress 
-                                value={data.maxScore ? (data.score || 0) / data.maxScore * 100 : 0} 
-                                className="h-1"
-                              />
-                              {data.issues && data.issues.length > 0 && (
-                                <div className="text-xs text-muted-foreground">
-                                  {data.issues.length} issue{data.issues.length !== 1 ? 's' : ''}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      {/* The per-category bars used to be repeated here,
+                          under every form, directly below the same eight bars
+                          in the breakdown panel at the top of this tab. On a
+                          single-form scan that was the identical set of
+                          numbers twice on one screen. The breakdown owns them
+                          now; this keeps the form's own total and whatever
+                          the model wrote about it. */}
                     </div>
                   </div>
                 )}
@@ -334,43 +315,55 @@ const FormAnalysisDisplay: React.FC<FormAnalysisDisplayProps> = ({
                   </div>
                 )}
 
-                {/* Issues and Recommendations */}
+                {/* Problems beside their fixes, under one heading.
+                    These were two stacked lists, and because the first is as
+                    tall as its contents the heading of the second sat some
+                    260px below the problem it answered. They are not zipped
+                    into pairs, because nothing in the data keys one to the
+                    other and the counts often disagree -- one sample form
+                    carries four problems against eight fixes. Side by side is
+                    as far as the data honestly allows. */}
                 {((form.accessibility?.issues?.length || 0) > 0 ||
                   (form.accessibility?.recommendations?.length || 0) > 0) && (
-                  <div className="space-y-4">
-                    {form.accessibility.issues && form.accessibility.issues.length > 0 && (
-                      <div>
-                        <h4 className="font-medium mb-3 flex items-center gap-2">
-                          <AlertTriangle className="h-4 w-4 text-red-500" />
-                          Issues Found ({form.accessibility.issues.length})
-                        </h4>
-                        <div className="space-y-2">
-                          {form.accessibility.issues.map((issue, issueIndex) => (
-                            <div key={issueIndex} className="flex items-start gap-2 p-3 bg-muted/50 border border-red-400 dark:border-red-600/60 rounded-lg">
-                              <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
-                              <span className="text-sm text-foreground">{issue}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                  <div>
+                    <h4 className="font-medium mb-3 flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                      Issues and fixes
+                    </h4>
 
-                    {form.accessibility.recommendations && form.accessibility.recommendations.length > 0 && (
-                      <div>
-                        <h4 className="font-medium mb-3 flex items-center gap-2">
-                          <Info className="h-4 w-4 text-blue-500" />
-                          Recommendations ({form.accessibility.recommendations.length})
-                        </h4>
-                        <div className="space-y-2">
-                          {form.accessibility.recommendations.map((rec, recIndex) => (
-                            <div key={recIndex} className="flex items-start gap-2 p-3 bg-muted/50 border border-blue-400 dark:border-blue-600/60 rounded-lg">
-                              <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                              <span className="text-sm text-foreground">{rec}</span>
-                            </div>
-                          ))}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {form.accessibility.issues && form.accessibility.issues.length > 0 && (
+                        <div>
+                          <h5 className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+                            Problems ({form.accessibility.issues.length})
+                          </h5>
+                          <div className="space-y-2">
+                            {form.accessibility.issues.map((issue, issueIndex) => (
+                              <div key={issueIndex} className="flex items-start gap-2 p-3 bg-muted/40 border-l-2 border-destructive rounded-r-md">
+                                <AlertCircle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+                                <span className="text-sm text-foreground">{issue}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+
+                      {form.accessibility.recommendations && form.accessibility.recommendations.length > 0 && (
+                        <div>
+                          <h5 className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+                            Suggested fixes ({form.accessibility.recommendations.length})
+                          </h5>
+                          <div className="space-y-2">
+                            {form.accessibility.recommendations.map((rec, recIndex) => (
+                              <div key={recIndex} className="flex items-start gap-2 p-3 bg-muted/40 border-l-2 border-sky-500 rounded-r-md">
+                                <Info className="h-4 w-4 text-sky-500 mt-0.5 flex-shrink-0" />
+                                <span className="text-sm text-foreground">{rec}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </CardContent>

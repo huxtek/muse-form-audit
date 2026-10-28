@@ -166,7 +166,10 @@ describe('AIScanner polling', () => {
     await submitScan();
 
     expect(getReportMock).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('COMPLETED')).toBeInTheDocument();
+    // The progress card gives way to the report header once there is no
+    // progress left to report.
+    expect(screen.getByText('Scan complete')).toBeInTheDocument();
+    expect(screen.queryByText(/Per-Form Analysis Progress/)).not.toBeInTheDocument();
 
     await advancePolls(5);
 
@@ -180,7 +183,7 @@ describe('AIScanner polling', () => {
 
     await submitScan();
 
-    expect(screen.getByText('Error Occurred')).toBeInTheDocument();
+    expect(screen.getAllByText('Scan failed').length).toBeGreaterThan(0);
     expect(screen.getByText('Browser service unavailable')).toBeInTheDocument();
 
     await advancePolls(5);
@@ -781,7 +784,7 @@ describe('AIScanner scan route', () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /new scan/i }));
+      fireEvent.click(screen.getByRole('button', { name: /scan another form/i }));
     });
 
     // Unlike Back, this one means start from nothing.
