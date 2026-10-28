@@ -510,3 +510,111 @@ describe('AIScanner sample report', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/sample report/i);
   });
 });
+
+describe('AIScanner submit feedback', () => {
+  const renderScanner = () =>
+    render(
+      <DevModeProvider>
+        <AIScanner />
+      </DevModeProvider>
+    );
+
+  const urlField = () => screen.getByLabelText('Website URL for AI form analysis');
+  const scanButton = () => screen.getByRole('button', { name: 'Start AI form analysis' });
+
+  /** A start request that stays in flight until it is resolved by hand. */
+  const pendingStart = () => {
+    let resolve: (value: unknown) => void = () => {};
+    const pending = new Promise((r) => {
+      resolve = r;
+    });
+
+    startScanMock.mockReturnValue(pending as ReturnType<typeof formAPI.startScan>);
+
+    return { resolve };
+  };
+
+  it('acknowledges the click before the request returns', async () => {
+    // Nothing on screen used to change for the length of the round trip --
+    // around half a second on a throttled connection -- so the button sat
+    // reading "Scan my form" and invited a second press.
+    pendingStart();
+    renderScanner();
+
+    fireEvent.change(urlField(), { target: { value: 'https://example.com' } });
+
+    await act(async () => {
+      fireEvent.submit(urlField().closest('form')!);
+    });
+
+    expect(scanButton()).toBeDisabled();
+    expect(scanButton()).toHaveAttribute('aria-busy', 'true');
+    expect(scanButton()).toHaveTextContent(/starting/i);
+  });
+
+  it('starts one scan however many times it is submitted', async () => {
+    // Two clicks 120ms apart really did start two scans: two rate-limit
+    // slots, two browser sessions and two sets of model calls.
+    pendingStart();
+    renderScanner();
+
+    fireEvent.change(urlField(), { target: { value: 'https://example.com' } });
+
+    await act(async () => {
+      fireEvent.submit(urlField().closest('form')!);
+      fireEvent.submit(urlField().closest('form')!);
+      fireEvent.submit(urlField().closest('form')!);
+    });
+
+    expect(startScanMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the button when the scan fails to start', async () => {
+    // Otherwise a rejected scan leaves it spinning with no way back.
+    startScanMock.mockRejectedValue(new Error('rate limited'));
+    renderScanner();
+
+    fireEvent.change(urlField(), { target: { value: 'https://example.com' } });
+
+    await act(async () => {
+      fireEvent.submit(urlField().closest('form')!);
+    });
+
+    expect(scanButton()).not.toBeDisabled();
+    expect(scanButton()).toHaveTextContent(/scan my form/i);
+  });
+
+  it('leaves the button alone when the URL never passed validation', async () => {
+    renderScanner();
+
+    await act(async () => {
+      fireEvent.submit(urlField().closest('form')!);
+    });
+
+    // A rejected URL must not strand the button in a starting state the
+    // user cannot clear.
+    expect(scanButton()).not.toBeDisabled();
+    expect(startScanMock).not.toHaveBeenCalled();
+  });
+
+  it('guards the sample report the same way', async () => {
+    let resolve: (value: unknown) => void = () => {};
+    startDemoMock.mockReturnValue(
+      new Promise((r) => {
+        resolve = r;
+      }) as ReturnType<typeof formAPI.startDemo>
+    );
+    renderScanner();
+
+    const sample = screen.getByRole('button', { name: /sample report/i });
+
+    await act(async () => {
+      fireEvent.click(sample);
+      fireEvent.click(sample);
+    });
+
+    expect(startDemoMock).toHaveBeenCalledTimes(1);
+    expect(sample).toBeDisabled();
+    expect(sample).toHaveTextContent(/loading sample/i);
+  });
+});

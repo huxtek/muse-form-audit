@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Bot, Scan, Download, ExternalLink, AlertTriangle, CheckCircle, ChevronRight, Clock, Zap, Globe, FileText, FlaskConical, Sparkles, Eye } from "lucide-react";
+import { Bot, Scan, Download, ExternalLink, AlertTriangle, CheckCircle, ChevronRight, Clock, Loader2, Zap, Globe, FileText, FlaskConical, Sparkles, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDevMode } from "@/contexts/DevModeContext";
 import { getScanUrl, getWebSocketUrl } from "@/lib/api-config";
@@ -114,6 +114,37 @@ export const AIScanner = () => {
   const formDetailRef = useRef<HTMLDivElement | null>(null);
   /** Validation message for the URL field, shown beside it and announced. */
   const [urlError, setUrlError] = useState<string | null>(null);
+
+  /**
+   * A start request is in flight.
+   *
+   * Nothing on screen used to acknowledge the click until the POST came
+   * back -- measured at around half a second on a throttled connection --
+   * so the button still read "Scan my form" and invited a second press.
+   * Two clicks 120ms apart really did start two scans: two rate-limit
+   * slots, two browser sessions and two sets of model calls.
+   *
+   * The ref is the guard and the state is the label. State alone is not
+   * enough: two clicks inside one render would both read the old value.
+   */
+  const [isStarting, setIsStarting] = useState(false);
+  const startInFlight = useRef(false);
+
+  const beginStart = () => {
+    if (startInFlight.current) {
+      return false;
+    }
+
+    startInFlight.current = true;
+    setIsStarting(true);
+
+    return true;
+  };
+
+  const endStart = () => {
+    startInFlight.current = false;
+    setIsStarting(false);
+  };
 
   /**
    * True for anything fabricated: the one-click sample report, and a keyless
@@ -260,6 +291,10 @@ export const AIScanner = () => {
    * visitor should not be left in a different mode than they arrived in.
    */
   const showSampleReport = async () => {
+    if (!beginStart()) {
+      return;
+    }
+
     setUrlError(null);
 
     try {
@@ -290,6 +325,8 @@ export const AIScanner = () => {
         description: error instanceof Error ? error.message : 'Could not load the sample report',
         variant: 'destructive'
       });
+    } finally {
+      endStart();
     }
   };
 
@@ -324,6 +361,12 @@ export const AIScanner = () => {
     }
 
     setUrlError(null);
+
+    // After validation, so a rejected URL does not leave the button stuck
+    // in a starting state the user cannot clear.
+    if (!beginStart()) {
+      return;
+    }
 
     try {
       const scanResults = await formAPI.startScan({
@@ -390,6 +433,10 @@ export const AIScanner = () => {
         description: error instanceof Error ? error.message : "Failed to start scan",
         variant: "destructive",
       });
+    } finally {
+      // Must clear on failure too, or a rejected scan leaves the button
+      // spinning with no way back.
+      endStart();
     }
   };
 
@@ -807,11 +854,27 @@ export const AIScanner = () => {
                         aria-label="Start AI form analysis"
                         id="muse-form-audit-scan-button"
                         type="submit"
+                        // Acknowledges the click immediately. Without this
+                        // the label sat unchanged for the length of the
+                        // round trip and a second press started a second
+                        // scan.
+                        disabled={isStarting}
+                        aria-busy={isStarting}
                       >
-                        <Scan className="h-5 w-5" />
-                        {/* Was "Full AI Scan", which contradicted the options
-                            immediately below it reading "single page". */}
-                        Scan my form
+                        {isStarting ? (
+                          <>
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                            Starting&hellip;
+                          </>
+                        ) : (
+                          <>
+                            <Scan className="h-5 w-5" />
+                            {/* Was "Full AI Scan", which contradicted the
+                                options immediately below reading
+                                "single page". */}
+                            Scan my form
+                          </>
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -1010,10 +1073,21 @@ export const AIScanner = () => {
                   type="button"
                   variant="outline"
                   onClick={showSampleReport}
+                  disabled={isStarting}
+                  aria-busy={isStarting}
                   className="mt-4 w-full border-border bg-muted/50 text-foreground hover:bg-muted hover:text-foreground"
                 >
-                  <Eye className="h-4 w-4 mr-2" />
-                  See a full sample report
+                  {isStarting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Loading sample&hellip;
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-4 w-4 mr-2" />
+                      See a full sample report
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
