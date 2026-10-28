@@ -1,6 +1,7 @@
 import { AIAgent } from './agent.js';
 import { attachVisualsToForms } from './lib/visuals/captureFormVisuals.js';
 import { putPageMap, putScreenshot } from './lib/visuals/screenshotStore.js';
+import { attachBehaviourToForms } from './lib/analysis/probeFormBehaviour.js';
 
 /**
  * Improved AI Agent specifically for FULL CRAWL mode
@@ -151,7 +152,7 @@ export class ImprovedFullCrawlAgent extends AIAgent {
         // across pages within one crawl.
         const extractedPageForms = await this.tools.extractForms(pageResult.html);
         const pageForms = attachVisualsToForms({
-          forms: extractedPageForms,
+          forms: attachBehaviourToForms(extractedPageForms, pageResult.formBehaviour),
           visuals: pageResult.formVisuals,
           jobId: this.jobId,
           putScreenshot,
@@ -267,7 +268,8 @@ export class ImprovedFullCrawlAgent extends AIAgent {
           formHtml: form.formHtml,
           formId: form.formId,
           fields: form.fields,
-          visualIndex: form.visual?.visualIndex
+          visualIndex: form.visual?.visualIndex,
+          behaviour: form.behaviour
         });
         
         // Create analyzed form object

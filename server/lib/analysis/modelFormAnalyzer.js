@@ -13,6 +13,7 @@ import {
   normalizeFormAnalysis,
   parseModelAnalysis
 } from './formAnalysisSchema.js';
+import { summariseBehaviour } from './probeFormBehaviour.js';
 
 /** Form HTML can be enormous; cap what we send per form. */
 export const DEFAULT_HTML_CHAR_LIMIT = Number(process.env.MODEL_HTML_CHAR_LIMIT || 24000);
@@ -39,12 +40,19 @@ Scoring rubric (score each category from 0 to its maximum):
 - labeling (0-15): does every control have a programmatically associated label (<label for>, aria-label, aria-labelledby)? Placeholder text alone is not a label.
 - inputHints (0-10): autocomplete tokens, inputmode, helpful placeholder or describedby text that tells an agent what value is expected.
 - dataTypes (0-15): correct input types (email, tel, number, date), required flags, pattern/min/max constraints that let an agent produce valid values.
-- validation (0-10): discoverable validation and error messaging an agent can read after a failed submit.
+- validation (0-10): discoverable validation and error messaging an agent can read after a failed submit. Score this from the observed-behaviour section where one is given: declared constraints, what the browser reports when they are checked, and whether a region exists to announce a failure. Do not score it down merely because no error text is visible on an untouched form.
 - submission (0-10): a clear, reachable submit control and an unambiguous submission path.
 - accessibility (0-5): roles, aria state, and readability that help an agent and a screen reader equally.
 
+What you are looking at:
+- The HTML and the screenshot show the form AT REST: untouched, with nothing filled in and nothing submitted. Validation and error messaging, by definition, mostly exist after interaction, so they are largely NOT in front of you.
+- When an "OBSERVED ON THE LIVE PAGE" section is present, judge validation and error handling from THAT, not from the absence of visible error text in the markup.
+- An empty alert container or live region is evidence that error handling EXISTS and is waiting for something to announce. Never report an empty one as missing or as a defect in itself.
+- The same goes for describing text that is empty until needed: wiring that is present but unused is wiring that is present.
+- If you cannot tell from what you were given whether something works, say so instead of asserting it is absent. Begin such an item with "unverified: " and do not let it drive the score down as if it were a confirmed fault. A form that was never submitted cannot be shown to lack submit-time validation.
+
 Rules:
-- Judge ONLY what the HTML and the screenshot show. Do not assume behaviour you cannot see.
+- Judge ONLY what the HTML, the screenshot and the observed-behaviour section show. Do not assume behaviour you cannot see.
 - Be specific and concrete. Quote attribute names and field names from the HTML.
 - "issues" are problems that block or mislead an AI agent, worst first.
 - "recommendations" are concrete fixes, each naming the field or attribute to change.
@@ -81,7 +89,14 @@ Return exactly this JSON structure:
 }`;
 
 /** Builds the user turn. Exported so the prompt is testable without a call. */
-export function buildAnalysisPrompt({ formHtml, formId, url, fields = [], htmlCharLimit = DEFAULT_HTML_CHAR_LIMIT }) {
+export function buildAnalysisPrompt({
+  formHtml,
+  formId,
+  url,
+  fields = [],
+  behaviour = null,
+  htmlCharLimit = DEFAULT_HTML_CHAR_LIMIT
+}) {
   const html = String(formHtml ?? '');
   const truncated = html.length > htmlCharLimit;
   const body = truncated ? html.slice(0, htmlCharLimit) : html;
@@ -100,10 +115,13 @@ export function buildAnalysisPrompt({ formHtml, formId, url, fields = [], htmlCh
     })
     .join('\n');
 
+  const observed = summariseBehaviour(behaviour);
+
   return [
     `Form id: ${formId || '(none)'}`,
     `Page URL: ${url || '(unknown)'}`,
     fieldSummary ? `\nFields the extractor found:\n${fieldSummary}` : '',
+    observed ? `\n${observed}` : '',
     truncated
       ? `\nNOTE: the HTML below was truncated at ${htmlCharLimit} characters. Score only what you can see.`
       : '',
@@ -145,6 +163,8 @@ export async function analyzeFormWithModel({
   url,
   fields,
   heuristicAnalysis,
+  /** Live-page observations, so validation is judged on evidence. */
+  behaviour = null,
   /** PNG bytes of the form crop, when one was captured. */
   screenshot = null,
   screenshotContentType = 'image/png',
@@ -188,7 +208,7 @@ export async function analyzeFormWithModel({
   }
 
   try {
-    const prompt = buildAnalysisPrompt({ formHtml, formId, url, fields, htmlCharLimit });
+    const prompt = buildAnalysisPrompt({ formHtml, formId, url, fields, behaviour, htmlCharLimit });
     const useImage = vision && Boolean(screenshot?.length);
     const content = useImage
       ? buildAnalysisContent({ prompt, screenshot, contentType: screenshotContentType })

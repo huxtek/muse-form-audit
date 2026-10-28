@@ -3,6 +3,7 @@ import { createLlmProvider } from './lib/llm/index.js';
 import { analyzeFormWithModel } from './lib/analysis/modelFormAnalyzer.js';
 import { attachVisualsToForms } from './lib/visuals/captureFormVisuals.js';
 import { getScreenshot, putPageMap, putScreenshot } from './lib/visuals/screenshotStore.js';
+import { attachBehaviourToForms } from './lib/analysis/probeFormBehaviour.js';
 
 /**
  * AI Agent for autonomous website crawling and form analysis
@@ -1794,7 +1795,7 @@ Focus on AI agent needs: name attributes, field identification, form submission 
       // Pair each form with its screenshot geometry; image bytes go to the
       // screenshot store so they never travel inside the results JSON.
       const formsData = attachVisualsToForms({
-        forms: extractedForms,
+        forms: attachBehaviourToForms(extractedForms, pageData.formBehaviour),
         visuals: pageData.formVisuals,
         jobId: this.jobId,
         putScreenshot,
@@ -2013,7 +2014,7 @@ Focus on AI agent needs: name attributes, field identification, form submission 
    * screenshot store rather than threaded through the crawl, which keeps the
    * extracted-form payloads small.
    */
-  async scoreForm({ formHtml, formId, fields, visualIndex }) {
+  async scoreForm({ formHtml, formId, fields, visualIndex, behaviour }) {
     const heuristicAnalysis = await this.tools.analyzeFormAccessibility(formHtml || '');
     const capture = Number.isInteger(visualIndex) ? getScreenshot(this.jobId, visualIndex) : null;
 
@@ -2024,6 +2025,7 @@ Focus on AI agent needs: name attributes, field identification, form submission 
       url: this.targetUrl,
       fields,
       heuristicAnalysis,
+      behaviour,
       screenshot: capture?.buffer ?? null,
       screenshotContentType: capture?.contentType ?? 'image/png'
     });
@@ -2038,7 +2040,8 @@ Focus on AI agent needs: name attributes, field identification, form submission 
         formHtml: formData.formHtml || formData.html || '',
         formId: formData.formId,
         fields: formData.fields,
-        visualIndex: formData.visual?.visualIndex
+        visualIndex: formData.visual?.visualIndex,
+        behaviour: formData.behaviour
       });
       
       // Create a detailed analysis result compatible with the existing system

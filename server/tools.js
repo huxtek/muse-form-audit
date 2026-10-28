@@ -7,6 +7,7 @@ import {
   expandViewportToPage,
   readFormGeometry
 } from './lib/visuals/captureFormVisuals.js';
+import { PROBE_ENABLED, probeFormBehaviour } from './lib/analysis/probeFormBehaviour.js';
 
 /**
  * AI Tools for comprehensive website crawling and form analysis
@@ -418,6 +419,14 @@ export class CrawlerTools {
         // Screenshots and geometry, while the page is still open. Cheerio
         // cannot supply coordinates, so this is the only chance. Geometry is
         // read once and shared between the form crops and the page map.
+        // What the markup cannot show: declared constraints, the regions
+        // waiting to announce an error, and what the browser says when those
+        // constraints are checked. Nothing is submitted.
+        let formBehaviour = [];
+        if (PROBE_ENABLED) {
+          formBehaviour = await probeFormBehaviour(page);
+        }
+
         let formVisuals = [];
         let pageMap = null;
         try {
@@ -461,6 +470,7 @@ export class CrawlerTools {
           fullContentPreserved: true,
           originalSize: html.length,
           formVisuals,
+          formBehaviour,
           pageMap
         };
         
