@@ -403,9 +403,36 @@ function runMockTimeline(jobId, timeline) {
 app.use('/api', generalApiLimiter);
 app.use('/api', analyzeRoutes);
 
+/**
+ * A request flag, from JSON or from a form body.
+ *
+ * An unchecked checkbox sends nothing at all; a checked one sends "on" unless
+ * it carries a value. Strings are the normal case for a form submit, and
+ * "false" must not come out true.
+ */
+export const toRequestBoolean = (value) => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+
+    return normalized === 'on' || normalized === 'true' || normalized === '1' || normalized === 'yes';
+  }
+
+  return Boolean(value);
+};
+
 app.post('/api/scan', scanLimiter, validateURLMiddleware, async (req, res) => {
   try {
-    const { fullCrawl = false, devMode = false, modelProvider } = req.body;
+    // Accepts JSON from the app and form-encoded from a native submit, so the
+    // scan form can declare a real action that genuinely works. A checkbox
+    // arrives as "on" and a hidden field as "false", and both are strings --
+    // taking them as-is would read "false" as true.
+    const fullCrawl = toRequestBoolean(req.body.fullCrawl);
+    const devMode = toRequestBoolean(req.body.devMode);
+    const { modelProvider } = req.body;
     const validatedURL = req.validatedURL;
     const jobId = uuidv4();
 

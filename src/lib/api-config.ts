@@ -42,3 +42,15 @@ export const getScreenshotUrl = (jobId: string, visualIndex: number): string =>
 /** URL of the whole-page map for one scanned page. */
 export const getPageMapUrl = (jobId: string, pageIndex: number): string =>
   `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PAGE_MAP}/${encodeURIComponent(jobId)}/${pageIndex}`;
+
+/**
+ * Where the scan form posts.
+ *
+ * The form declares this as a real `action`, so an agent can see where the
+ * submission goes and a native submit actually starts a scan and returns the
+ * job id. The endpoint accepts form-encoded bodies for exactly this reason:
+ * declaring an action that 400s would be markup that lies to the agent we are
+ * trying to help.
+ */
+export const getScanUrl = (): string =>
+  `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.SCAN}`;

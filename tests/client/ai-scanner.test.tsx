@@ -258,7 +258,8 @@ describe('AIScanner own-form compatibility', () => {
     renderScanner();
 
     expect(urlField()).toBeRequired();
-    expect(urlField()).toHaveAttribute('name', 'website-url');
+    // Named as /api/scan reads it, so the declared action works.
+    expect(urlField()).toHaveAttribute('name', 'url');
   });
 
   it('writes a validation error beside the field, not only in a toast', async () => {
@@ -295,11 +296,10 @@ describe('AIScanner own-form compatibility', () => {
     const toggle = screen.getByRole('switch');
     expect(toggle).toHaveAccessibleName(/scanning this page only/i);
 
-    // Radix puts the name on a hidden input rather than the switch button,
-    // which is the control that actually carries the value into the submit --
-    // so the form really does send a full-crawl value now.
-    const carrier = urlField().closest('form')!.querySelector('input[name="full-crawl"]');
-    expect(carrier).not.toBeNull();
+    expect(toggle).toHaveAttribute('name', 'fullCrawl');
+    // One control carries both id and name now, where the Radix switch put
+    // them on different elements.
+    expect(toggle).toHaveAttribute('id', 'fullCrawl');
   });
 
   it('describes the crawl scope without contradicting itself', async () => {
@@ -320,8 +320,8 @@ describe('AIScanner own-form compatibility', () => {
 
     for (const option of options) {
       // Targetable by attribute rather than only by text and position.
-      expect(option.getAttribute('id')).toMatch(/^analysis-model-/);
-      expect(option).toHaveAttribute('name', 'analysis-model');
+      expect(option.getAttribute('id')).toMatch(/^modelProvider-/);
+      expect(option).toHaveAttribute('name', 'modelProvider');
     }
   });
 });

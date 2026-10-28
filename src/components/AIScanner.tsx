@@ -4,12 +4,12 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
+
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Bot, Scan, Download, ExternalLink, AlertTriangle, CheckCircle, Clock, Zap, Globe, FileText, FlaskConical, Sparkles, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDevMode } from "@/contexts/DevModeContext";
-import { getWebSocketUrl } from "@/lib/api-config";
+import { getScanUrl, getWebSocketUrl } from "@/lib/api-config";
 import { formAPI } from "@/services/api";
 import { PDFGenerator } from "@/lib/pdf-generator";
 import { getNormalizedResults } from "@/lib/scan-results";
@@ -604,7 +604,18 @@ export const AIScanner = () => {
                     anything reading the markup, but letting the browser
                     enforce type="url" would start rejecting the bare domains
                     this has always accepted. */}
-                <form className="space-y-6" onSubmit={handleScanSubmit} noValidate>
+                <form
+                  className="space-y-6"
+                  // A real submission path, not a decorative one: /api/scan
+                  // accepts form-encoded bodies, so an agent that submits
+                  // this natively starts a scan and gets the job id back.
+                  // Declaring an action that 400s would be markup lying to
+                  // the agent we are trying to help.
+                  action={getScanUrl()}
+                  method="post"
+                  onSubmit={handleScanSubmit}
+                  noValidate
+                >
                   {/* URL Input */}
                   <div className="flex flex-col md:flex-row gap-4">
                     <div className="flex-1 relative">
@@ -636,7 +647,10 @@ export const AIScanner = () => {
                         }
                         aria-invalid={urlError ? true : undefined}
                         id="muse-form-audit-url-input"
-                        name="website-url"
+                        // Named exactly as /api/scan reads it, so a native
+                        // submit genuinely works and the markup and the API
+                        // speak one vocabulary.
+                        name="url"
                         autoComplete="url"
                         required
                       />
@@ -721,19 +735,25 @@ export const AIScanner = () => {
                           </div>
                         </div>
                         
-                        <Switch
-                          id="full-crawl"
-                          // Had no accessible name at all: no aria-label, no
-                          // aria-labelledby, no name, no label[for]. A screen
-                          // reader announced an unnamed switch, and an agent
-                          // had nothing to target it by.
-                          name="full-crawl"
-                          type="button"
+                        {/* A native checkbox, not a custom widget. The
+                            previous Radix switch put `id` on a button while
+                            the submittable value lived on a hidden checkbox
+                            carrying `name`, so id-based and name-based
+                            targeting acted on different elements. One control
+                            now carries both, and its value really submits.
+                            role="switch" keeps the toggle semantics. */}
+                        <input
+                          type="checkbox"
+                          role="switch"
+                          // id and name identical, and both exactly what the
+                          // endpoint reads.
+                          id="fullCrawl"
+                          name="fullCrawl"
                           aria-labelledby="full-crawl-heading"
                           aria-describedby="full-crawl-description"
                           checked={fullCrawl}
-                          onCheckedChange={handleFullCrawlToggle}
-                          className="data-[state=checked]:bg-violet-600 data-[state=unchecked]:bg-slate-600 data-[state=unchecked]:border-slate-500 border-2"
+                          onChange={(event) => handleFullCrawlToggle(event.target.checked)}
+                          className="relative h-6 w-11 shrink-0 cursor-pointer appearance-none rounded-full border-2 border-slate-500 bg-slate-600 transition-colors before:absolute before:left-0.5 before:top-0.5 before:h-4 before:w-4 before:rounded-full before:bg-white before:transition-transform before:content-[''] checked:border-violet-600 checked:bg-violet-600 checked:before:translate-x-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
                         />
                       </div>
                     </div>
@@ -766,31 +786,45 @@ export const AIScanner = () => {
                         aria-label="Analysis model"
                         className="flex rounded-lg border border-slate-600 overflow-hidden"
                       >
+                        {/* Native radios with real labels. They were buttons
+                            carrying aria-checked and no submittable input, so
+                            an agent could read the selection but never set or
+                            submit it. The input is visually hidden rather
+                            than removed, so it still takes focus and still
+                            posts its value; the label is what you see. */}
                         {Object.values(MODEL_PROVIDERS).map((provider) => (
-                          <button
-                            key={provider}
-                            type="button"
-                            role="radio"
-                            // id and name so an agent can target a specific
-                            // option instead of guessing from text position.
-                            id={`analysis-model-${provider}`}
-                            name="analysis-model"
-                            value={provider}
-                            aria-checked={modelProvider === provider}
-                            onClick={() => handleModelProviderSelect(provider)}
-                            className={`px-4 py-2 text-sm font-medium transition-colors ${
-                              modelProvider === provider
-                                ? 'bg-sky-600 text-white'
-                                : 'bg-slate-800/60 text-slate-300 hover:bg-slate-700/60'
-                            }`}
-                          >
-                            {MODEL_PROVIDER_DETAILS[provider].label}
-                          </button>
+                          <span key={provider} className="flex">
+                            <input
+                              type="radio"
+                              id={`modelProvider-${provider}`}
+                              name="modelProvider"
+                              value={provider}
+                              checked={modelProvider === provider}
+                              onChange={() => handleModelProviderSelect(provider)}
+                              className="peer sr-only"
+                            />
+
+                            <label
+                              htmlFor={`modelProvider-${provider}`}
+                              className={`cursor-pointer px-4 py-2 text-sm font-medium transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-inset peer-focus-visible:ring-sky-300 ${
+                                modelProvider === provider
+                                  ? 'bg-sky-600 text-white'
+                                  : 'bg-slate-800/60 text-slate-300 hover:bg-slate-700/60'
+                              }`}
+                            >
+                              {MODEL_PROVIDER_DETAILS[provider].label}
+                            </label>
+                          </span>
                         ))}
                       </div>
                     </div>
                     </div>
                   </fieldset>
+
+                  {/* Dev Mode lives in the header, outside this form, so a
+                      native submit would otherwise silently lose it and run
+                      a real scan against someone's site. */}
+                  <input type="hidden" name="devMode" value={isDevMode ? 'true' : 'false'} />
 
                   {/* Description based on mode */}
                   <div className="text-sm space-y-3">
