@@ -1,0 +1,104 @@
+# Render Blueprint for the scanner API.
+#
+# The UI is not here: it is a static bundle on Netlify (see netlify.toml).
+# Only the API needs a server, and it needs a persistent one -- `jobs` is an
+# in-memory Map and the WebSocket server is attached to the HTTP server, so
+# neither survives being spread across instances or invocations.
+#
+# Render's native Node runtime rather than a Dockerfile. There is nothing to
+# containerise: server/tools.js reaches Chrome through Browserless over a
+# WebSocket instead of launching it, so this is a plain Node process with no
+# system libraries and no Chromium to install. Using the native runtime also
+# means the build is reproducible on a machine without Docker -- `npm ci` and
+# `npm start` in server/ are exactly what runs here and exactly what can be
+# run locally to check it.
+#
+# Secrets use `sync: false`, so Render prompts for them and stores them
+# encrypted. Nothing secret is written into this file.
+services:
+  - type: web
+    name: huxtek-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    region: oregon
+    plan: free
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+
+      # 0.0.0.0, not the 127.0.0.1 default. Bound to loopback the process is
+      # unreachable from outside its container and the health check never
+      # passes, which presents as a deploy that builds and then times out.
+      - key: HOST
+        value: 0.0.0.0
+
+      # --- Where the browser lives. Required for real scans. ---
+      - key: BROWSERLESS_TOKEN
+        sync: false
+
+      # --- Model credentials. Required for real scans. ---
+      - key: MODEL_API_KEY
+        sync: false
+
+      # --- Real scans are off until the demo. ---
+      #
+      # Enforced by the API, not the UI: this endpoint is public and callable
+      # directly, so hiding the control would not prevent a scan. The browser
+      # reads /api/config at runtime and follows, which is what makes turning
+      # this on a restart rather than a UI rebuild -- Vite inlines its own
+      # variables at build time, so a VITE_ flag would mean redeploying
+      # Netlify to flip it.
+      #
+      # Demo day: set this to true in the Render dashboard. ~30s restart.
+      - key: ENABLE_REAL_SCANS
+        value: "false"
+
+      # --- Which browser origins may call this API. ---
+      - key: ALLOWED_ORIGINS
+        value: https://huxtek.netlify.app
+
+      - key: MODEL_PROVIDER
+        value: muse
+      - key: MUSE_MODEL
+        value: muse-wonder-1.0
+      - key: MUSE_REASONING_EFFORT
+        value: low
+      - key: MODEL_VISION
+        value: "true"
+      - key: PROBE_FORM_BEHAVIOUR
+        value: "true"
+
+      # --- Memory. The free instance has 512MB. The screenshot store
+      # defaults to a 150MB budget, which alongside Node's own footprint
+      # leaves too little headroom to be comfortable. ---
+      - key: SCREENSHOT_STORE_MAX_BYTES
+        value: "62914560"
+
+      # --- Job retention. The store is in process memory and used to grow
+      # without bound; on a 512MB instance that ends in an OOM kill that
+      # takes every in-flight scan with it. ---
+      - key: JOB_TTL_MS
+        value: "1800000"
+      - key: MAX_JOBS
+        value: "60"
+
+      # --- SSRF guard. Private ranges stay blocked; cloud metadata is
+      # blocked regardless of this setting. ---
+      - key: ALLOW_PRIVATE_TARGETS
+        value: "false"
+
+      # --- Rate limits. The only thing between a stranger and the model
+      # bill, so they are tighter here than locally. ---
+      - key: SCAN_RATE_LIMIT_WINDOW_MS
+        value: "300000"
+      - key: SCAN_RATE_LIMIT_MAX_REQUESTS
+        value: "3"
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: "60"
+
+      - key: NODE_ENV
+        value: production

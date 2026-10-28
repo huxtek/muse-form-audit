@@ -1,0 +1,28 @@
+# Netlify configuration for the UI.
+#
+# The API is not here. It is a persistent Node service on Render, because
+# `jobs` is an in-memory Map and the WebSocket server is bound to the HTTP
+# server -- neither survives a function invocation model.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # Vite inlines every VITE_ variable into the bundle at build time, so this
+  # is baked in at build and is world-readable in the published JavaScript.
+  # Nothing secret belongs in this block.
+  VITE_API_BASE_URL = "https://huxtek-api.onrender.com"
+  NODE_VERSION = "22"
+
+# Single-page app fallback.
+#
+# The build emits one index.html and no file at /scan, so a pasted link or a
+# reload on /scan?url=example.com would 404 before any of our JavaScript
+# runs -- which is exactly the case the route exists to serve. Duplicated
+# from public/_redirects on purpose: that file travels with the build output
+# and this one is visible to anyone reading the repo, and they agree.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

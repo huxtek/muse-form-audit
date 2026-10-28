@@ -18,12 +18,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { AIAgent } from './agent.js';
 import { rewriteOrigin } from './lib/rewriteOrigin.js';
 import {
+  deleteJobScreenshots,
   getPageMap,
   getScreenshot,
   putPageMap,
   putScreenshot,
   screenshotStoreStats
 } from './lib/visuals/screenshotStore.js';
+import { getRetentionConfig, sweepJobs } from './lib/jobRetention.js';
 import {
   SAMPLE_FIELD_ISSUES,
   SAMPLE_FORM_FINDINGS,
@@ -116,6 +118,37 @@ app.use(rateLimitInfo);
 const jobs = new Map();
 const agents = new Map();
 
+/**
+ * Whether real scans are allowed on this instance.
+ *
+ * Server-side on purpose. A flag compiled into the browser bundle would be
+ * both unenforceable -- the endpoint stays callable regardless -- and awkward
+ * to change, since Vite inlines its variables at build time and flipping one
+ * means rebuilding and redeploying the UI. As a server setting it is a single
+ * `fly secrets set` and a rolling restart, and `/api/config` below lets the
+ * UI follow without being rebuilt.
+ *
+ * Mock scans are never gated: they read fixtures and cost nothing.
+ */
+const realScansEnabled = String(process.env.ENABLE_REAL_SCANS ?? 'true').toLowerCase() !== 'false';
+
+/**
+ * Drops finished jobs on a timer so a public instance does not leak until it
+ * is killed. The screenshot bytes live in their own store keyed by job id and
+ * are much larger than the record, so they go at the same moment.
+ */
+const retention = getRetentionConfig();
+const jobSweep = setInterval(() => {
+  const evicted = sweepJobs(jobs, { ...retention, onEvict: deleteJobScreenshots });
+
+  if (evicted.length > 0) {
+    console.log(`Job sweep released ${evicted.length} job(s); ${jobs.size} retained`);
+  }
+}, retention.sweepIntervalMs);
+
+// Nothing should be kept alive by a housekeeping timer.
+jobSweep.unref();
+
 // =============================================================================
 // HEALTH
 // =============================================================================
@@ -137,7 +170,33 @@ app.get('/health', publicLimiter, (req, res) => {
     },
     urlGuard: {
       allowPrivateTargets: getUrlGuardConfig().allowPrivateTargets
-    }
+    },
+    jobs: {
+      retained: jobs.size,
+      maxJobs: retention.maxJobs,
+      ttlMs: retention.ttlMs
+    },
+    realScansEnabled
+  });
+});
+
+/**
+ * What this instance will and will not do, for the browser to read at
+ * startup.
+ *
+ * Exists so the demo gate can be flipped without rebuilding the UI. Anything
+ * the interface needs to know about a deployment has to arrive at runtime,
+ * because Vite inlines its own environment variables into the bundle at build
+ * time -- a VITE_ flag would make "turn real scans on" mean "rebuild and
+ * redeploy the front end", which is not something to be doing on a demo day.
+ *
+ * Deliberately says nothing about credentials, only about behaviour.
+ */
+app.get('/api/config', publicLimiter, (req, res) => {
+  res.json({
+    realScansEnabled,
+    sampleReportAvailable: true,
+    defaultModelProvider: resolveProviderName()
   });
 });
 
@@ -510,6 +569,21 @@ app.post('/api/scan', scanLimiter, validateURLMiddleware, async (req, res) => {
     const { modelProvider } = req.body;
     const validatedURL = req.validatedURL;
     const jobId = uuidv4();
+
+    // Refused here rather than hidden in the UI: this endpoint is public and
+    // callable directly, so the interface declining to offer a real scan
+    // would not prevent one. Mock scans pass straight through -- they read
+    // fixtures, reach no third party and spend nothing.
+    if (!devMode && !realScansEnabled) {
+      res.status(403).json({
+        error: 'Real scans are disabled',
+        message:
+          'This instance is running in demo mode. The sample report shows the full output; real scans of live sites are turned off.',
+        code: 'REAL_SCANS_DISABLED'
+      });
+
+      return;
+    }
 
     // Untrusted input: only an allowlisted provider name is honoured, anything
     // else falls back to the server default.

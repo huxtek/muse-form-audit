@@ -802,3 +802,62 @@ describe('AIScanner scan route', () => {
     expect(startScanMock).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The deployed demo runs with real scans switched off at the API. The gate is
+ * enforced there, because /api/scan is public and callable directly, but the
+ * interface has to explain it rather than let someone fill the field, press
+ * Scan and collect a 403.
+ */
+describe('AIScanner demo mode', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const withScanConfig = (realScansEnabled: boolean) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ realScansEnabled })
+      })
+    );
+  };
+
+  it('says so when the instance will not accept a real target', async () => {
+    withScanConfig(false);
+    renderScanner();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(screen.getByText(/Demo mode\./)).toBeInTheDocument();
+    expect(screen.getByText(/Live scans are switched off/)).toBeInTheDocument();
+  });
+
+  it('stays out of the way on an instance that does accept them', async () => {
+    withScanConfig(true);
+    renderScanner();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(screen.queryByText(/Demo mode\./)).not.toBeInTheDocument();
+  });
+
+  it('keeps the sample report reachable in demo mode', async () => {
+    withScanConfig(false);
+    renderScanner();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // The sample is the whole product in demo mode, so it must not be gated.
+    expect(
+      screen.getByRole('button', { name: /see a full sample report/i })
+    ).toBeEnabled();
+  });
+});

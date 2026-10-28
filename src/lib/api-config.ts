@@ -24,9 +24,21 @@ export const API_CONFIG = {
     JOBS: '/api/jobs',
     SCREENSHOT: '/api/screenshot',
     PAGE_MAP: '/api/page-map',
+    CONFIG: '/api/config',
     HEALTH: '/health'
   }
 };
+
+/**
+ * What the deployed server will and will not do.
+ *
+ * Read at runtime rather than compiled in. Vite inlines every VITE_ variable
+ * into the bundle at build time, so a build-time flag would make "turn real
+ * scans on" mean "rebuild and redeploy the front end" -- the last thing to be
+ * doing minutes before a demo. Asking the server instead makes it a restart.
+ */
+export const getConfigUrl = (): string =>
+  `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CONFIG}`;
 
 export const getWebSocketUrl = (): string => {
   return API_CONFIG.WS_URL;

@@ -17,6 +17,7 @@ import {
   parseScanParams,
   SCAN_DEMO_TARGET
 } from "@/lib/scan-url";
+import { useScanConfig } from "@/hooks/useScanConfig";
 import FormPreviewIllustration from "@/components/FormPreviewIllustration";
 import { formAPI } from "@/services/api";
 import { PDFGenerator } from "@/lib/pdf-generator";
@@ -231,6 +232,12 @@ export const AIScanner = () => {
   });
   const { toast } = useToast();
   const { isDevMode } = useDevMode();
+
+  /**
+   * Whether this deployment accepts real targets. Asked at runtime so the
+   * demo gate can be flipped with a server restart instead of a UI rebuild.
+   */
+  const { realScansEnabled } = useScanConfig();
 
   // WebSocket connection for real-time updates
   useEffect(() => {
@@ -1006,6 +1013,21 @@ export const AIScanner = () => {
                       </p>
                     </div>
                     
+                    {/* Says so when the deployment will not accept a real
+                        target, rather than letting someone fill the field,
+                        press Scan and collect a 403. The API is what enforces
+                        it; this is only the explanation. */}
+                    {!realScansEnabled && (
+                      <div
+                        role="status"
+                        className="rounded-lg border border-amber-500/40 bg-amber-950/30 px-4 py-3 text-sm text-amber-200 text-left"
+                      >
+                        <strong className="font-semibold">Demo mode.</strong> Live scans are
+                        switched off on this instance, so the field below will not accept a
+                        site. The sample report shows the complete output.
+                      </div>
+                    )}
+
                     {/* Analysis Button */}
                     <div className="flex justify-center">
                       <Button
