@@ -174,3 +174,187 @@ describe('PDFGenerator report framing', () => {
     expect(text).toContain('Fourteen forms were analyzed.');
   });
 });
+
+/**
+ * The PDF and the report page must say the same thing, because they are two
+ * renderings of one scan and the PDF is the copy that gets forwarded.
+ *
+ * They did not. The page showed `accessibility.score` and the findings from
+ * `fieldIssues`/`formFindings`; the PDF computed a private
+ * 100-minus-penalties figure and listed only the `issues`/`recommendations`
+ * strings. On the sample they disagreed on every form, and the newsletter
+ * form printed 100/100 in the PDF while the page scored it 78 with three
+ * findings against it.
+ *
+ * Both now read `@/lib/report-data`, so these assert the shared result
+ * reaches the page's numbers rather than re-deriving anything.
+ */
+const scoredForms = [
+  {
+    formId: 'form-0',
+    accessibility: {
+      score: 57,
+      categories: {
+        structural: { score: 9, maxScore: 15 },
+        identification: { score: 16, maxScore: 20 },
+        dataTypes: { score: 2, maxScore: 15 }
+      },
+      fieldIssues: [
+        { field: 'fullName', severity: 'high', issue: 'No id and no autocomplete token' },
+        { field: 'phoneNumber', severity: 'low', issue: 'No autocomplete tel' }
+      ],
+      formFindings: [{ severity: 'medium', issue: 'Visual order fights DOM order' }]
+    }
+  },
+  {
+    formId: 'form-signin',
+    accessibility: {
+      score: 34,
+      categories: { structural: { score: 6, maxScore: 15 } },
+      fieldIssues: [{ field: 'password', severity: 'high', issue: 'No autocomplete token' }]
+    }
+  }
+];
+
+describe('PDFGenerator score', () => {
+  it('prints the score the analysis produced', () => {
+    new PDFGenerator().generateReport(
+      reportWith({ forms: scoredForms as never }),
+      'job-1'
+    );
+
+    // (57 + 34) / 2, the same average the report strip shows.
+    expect(renderedText()).toContain('46/100');
+    expect(renderedText()).toContain('averaged across 2 forms');
+  });
+
+  it('no longer prints a second, invented score beside it', () => {
+    new PDFGenerator().generateReport(
+      reportWith({ forms: scoredForms as never }),
+      'job-1'
+    );
+
+    // The old figure was 100 minus 50 for a CAPTCHA, 30 for missing name
+    // attributes, 20 for missing labels and 15 for a file upload. With no
+    // aiAccessibility at all it scored every form a clean 100.
+    expect(renderedText()).not.toContain('Accessibility Score:');
+    expect(renderedText()).not.toContain('100/100');
+  });
+
+  it('breaks the score into the categories that produced it', () => {
+    new PDFGenerator().generateReport(
+      reportWith({ forms: scoredForms as never }),
+      'job-1'
+    );
+
+    const text = renderedText();
+
+    expect(text).toContain('Where the points went');
+    // Structural is summed across both forms: 9 + 6 of 15 + 15.
+    expect(text).toContain('15/30');
+    expect(text).toContain('Data types');
+  });
+
+  it('survives a form with no accessibility block at all', () => {
+    // This used to throw and take the whole download with it: the old score
+    // read form.characteristics.hasCaptcha and
+    // form.accessibility.aiAccessibility.hasNameAttributes unguarded, both
+    // optional in scan-types.
+    expect(() =>
+      new PDFGenerator().generateReport(
+        reportWith({ forms: [{ formId: 'bare' }] as never }),
+        'job-1'
+      )
+    ).not.toThrow();
+  });
+});
+
+describe('PDFGenerator findings', () => {
+  it('lists every finding the report page lists, worst first', () => {
+    new PDFGenerator().generateReport(
+      reportWith({ forms: scoredForms as never }),
+      'job-1'
+    );
+
+    const text = renderedText();
+
+    expect(text).toContain('FINDINGS (4)');
+    expect(text).toContain('2 high, 1 medium, 1 low');
+    expect(text).toContain('No id and no autocomplete token');
+    expect(text).toContain('Visual order fights DOM order');
+    expect(text).toContain('No autocomplete tel');
+  });
+
+  it('orders them worst first, as the page does', () => {
+    new PDFGenerator().generateReport(
+      reportWith({ forms: scoredForms as never }),
+      'job-1'
+    );
+
+    const text = renderedText();
+
+    expect(text.indexOf('No id and no autocomplete token')).toBeLessThan(
+      text.indexOf('Visual order fights DOM order')
+    );
+    expect(text.indexOf('Visual order fights DOM order')).toBeLessThan(
+      text.indexOf('No autocomplete tel')
+    );
+  });
+
+  it('says which form and which control each finding concerns', () => {
+    new PDFGenerator().generateReport(
+      reportWith({ forms: scoredForms as never }),
+      'job-1'
+    );
+
+    const text = renderedText();
+
+    expect(text).toContain('[HIGH] Form 1 / fullName');
+    expect(text).toContain('[HIGH] Form 2 / password');
+    expect(text).toContain('[MED] Form 1 / whole form');
+  });
+
+  it('omits the section when there is nothing to fix', () => {
+    new PDFGenerator().generateReport(
+      reportWith({
+        forms: [{ formId: 'clean', accessibility: { score: 98, fieldIssues: [] } }] as never
+      }),
+      'job-1'
+    );
+
+    expect(renderedText()).not.toContain('FINDINGS');
+  });
+});
+
+describe('PDFGenerator text encoding', () => {
+  it('substitutes punctuation it cannot encode instead of deleting it', () => {
+    new PDFGenerator().generateReport(
+      reportWith({
+        forms: [
+          {
+            formId: 'f',
+            accessibility: {
+              score: 50,
+              fieldIssues: [
+                {
+                  field: 'card',
+                  severity: 'high',
+                  // An em dash and curly quotes, which a model writes and
+                  // which jsPDF's built-in fonts cannot encode.
+                  issue: 'Add autocomplete=\u201Ccc-number\u201D \u2014 otherwise agents guess\u2026'
+                }
+              ]
+            }
+          }
+        ] as never
+      }),
+      'job-1'
+    );
+
+    const text = renderedText();
+
+    // Previously these vanished mid-sentence, leaving "autocompletecc-number
+    // otherwise agents guess".
+    expect(text).toContain('Add autocomplete="cc-number" - otherwise agents guess...');
+  });
+});
