@@ -1,27 +1,26 @@
-import { Bot } from "lucide-react";
 import { AIScanner } from "@/components/AIScanner";
 
+/**
+ * The landing page shell: background, container, and the scanner.
+ *
+ * The headline and the example report live inside AIScanner rather than here,
+ * because they belong in the same grid as the URL input -- the message and
+ * the action read as one thing, and all three disappear together once a scan
+ * starts, giving the results the full width.
+ *
+ * This used to hold its own copy as well, which is how the page ended up
+ * describing itself five times: a subtitle here, a paragraph in the scanner,
+ * a card title, process bullets and feature cards. It also wrapped a second
+ * min-h-screen section, leaving a screenful of dead space between the pitch
+ * and the input.
+ */
 export const Hero = () => {
   return (
     <div className="min-h-screen relative overflow-hidden">
-      {/* Simple gradient background */}
       <div className="absolute inset-0 bg-gradient-hero" />
 
-      <div className="relative z-10 container mx-auto px-4 py-20">
-        <div className="max-w-4xl mx-auto text-center">
-          {/* Header */}
-          <div className="flex items-center justify-center gap-3 mb-6">
-            <Bot className="h-8 w-8 text-primary" />
-            <h1 className="text-5xl md:text-7xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-              Muse Form Audit
-            </h1>
-          </div>
-
-          <p className="text-xl md:text-2xl text-muted-foreground mb-12 max-w-3xl mx-auto leading-relaxed">
-            Discover if your website forms are accessible to AI agents with comprehensive AI-driven scanning.
-          </p>
-
-          {/* AI Scanner */}
+      <div className="relative z-10 container mx-auto px-4 py-16 md:py-20">
+        <div className="max-w-6xl mx-auto">
           <AIScanner />
         </div>
       </div>

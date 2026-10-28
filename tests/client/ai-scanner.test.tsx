@@ -343,3 +343,83 @@ describe('AIScanner own-form compatibility', () => {
     }
   });
 });
+
+/**
+ * The landing page used to describe itself five times -- a subtitle, a
+ * paragraph, a card title, four process bullets and three feature cards --
+ * while never showing what an audit produces, and led with the product's own
+ * name in the largest type on the page.
+ */
+describe('AIScanner landing page', () => {
+  const renderScanner = () =>
+    render(
+      <DevModeProvider>
+        <AIScanner />
+      </DevModeProvider>
+    );
+
+  it('leads with what the visitor cannot answer, not the product name', () => {
+    renderScanner();
+
+    const heading = screen.getByRole('heading', { level: 1 });
+    expect(heading).toHaveTextContent(/can an ai agent fill in your form/i);
+    // The name belongs in the header, where it already is.
+    expect(heading).not.toHaveTextContent(/muse form audit/i);
+  });
+
+  it('shows an example report instead of only describing one', () => {
+    renderScanner();
+
+    // The annotated screenshot is the product's whole argument, and a visitor
+    // used to see none of it before committing to a scan.
+    expect(screen.getByRole('img', { name: /example report/i })).toBeInTheDocument();
+  });
+
+  it('carries no duplicate pitch or process copy', () => {
+    renderScanner();
+
+    expect(screen.queryByText(/Advanced AI-driven website analyzer/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/AI agent will (systematically|autonomously)/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/AI-Powered Deep Scan/i)).not.toBeInTheDocument();
+  });
+
+  it('makes no claim about a model or transport it does not use', () => {
+    renderScanner();
+
+    // Said "GPT-5 driven autonomous crawling" long after moving to Muse, and
+    // advertised our WebSocket to people who do not have one.
+    expect(screen.queryByText(/GPT-5/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/WebSocket/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the scan options collapsed, with their state in the summary', () => {
+    renderScanner();
+
+    const options = screen.getByText(/^Options/).closest('details');
+    expect(options).not.toBeNull();
+    expect(options).not.toHaveAttribute('open');
+    // Collapsed is only acceptable if you can still see what it is set to.
+    expect(options).toHaveTextContent(/single page/i);
+    expect(options).toHaveTextContent(/muse/i);
+  });
+
+  it('keeps the options inside the form so a native submit still carries them', () => {
+    renderScanner();
+
+    // A closed <details> hides its content but does not remove it from the
+    // form, so fullCrawl is still submitted.
+    const form = screen.getByLabelText('Website URL for AI form analysis').closest('form');
+    expect(form?.querySelector('details #fullCrawl')).not.toBeNull();
+    expect(form?.querySelector('details [name="modelProvider"]')).not.toBeNull();
+  });
+
+  it('does not promise a full scan while set to a single page', () => {
+    renderScanner();
+
+    // The button read "Full AI Scan" directly above options saying
+    // "single page".
+    const submit = screen.getByRole('button', { name: 'Start AI form analysis' });
+    expect(submit).toHaveTextContent(/scan my form/i);
+    expect(submit).not.toHaveTextContent(/full/i);
+  });
+});

@@ -6,10 +6,11 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Bot, Scan, Download, ExternalLink, AlertTriangle, CheckCircle, Clock, Zap, Globe, FileText, FlaskConical, Sparkles, Eye } from "lucide-react";
+import { Bot, Scan, Download, ExternalLink, AlertTriangle, CheckCircle, ChevronRight, Clock, Zap, Globe, FileText, FlaskConical, Sparkles, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDevMode } from "@/contexts/DevModeContext";
 import { getScanUrl, getWebSocketUrl } from "@/lib/api-config";
+import FormPreviewIllustration from "@/components/FormPreviewIllustration";
 import { formAPI } from "@/services/api";
 import { PDFGenerator } from "@/lib/pdf-generator";
 import { getNormalizedResults } from "@/lib/scan-results";
@@ -577,26 +578,19 @@ export const AIScanner = () => {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-hero" />
-      
-      <div className="relative z-10 container mx-auto px-4 py-20">
-        <div className="max-w-4xl mx-auto text-center">          
-          
-          <p className="text-xl md:text-2xl text-muted-foreground mb-12 max-w-3xl mx-auto leading-relaxed">
-            Advanced AI-driven website analyzer that scans web pages to analyze all forms and provide comprehensive accessibility reports for AI agents.
-          </p>
+    <>
+      <div>
+        <div>
 
-          {/* Scan Input */}
+          {/* The message, the action and the outcome in one grid, so "what is
+              this", "what do I do" and "what do I get" are answered together.
+              The headline used to be the product's own name in the largest
+              type on the page, directly under the same name in the header,
+              with the input a screenful below. All of this clears out once a
+              scan starts, giving the results the full width. */}
           {!currentJob && (
-            <Card className="bg-card/50 backdrop-blur-sm border-border/50 shadow-glow mb-12 max-w-2xl mx-auto">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5" />
-                  AI-Powered Deep Scan
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+            <div className="grid gap-10 lg:grid-cols-2 lg:gap-14 lg:items-center mb-16">
+              <div className="text-center lg:text-left">
                 {/* A real form, so Enter submits and an agent has a
                     submission boundary to work with rather than a div and a
                     click handler. noValidate keeps our own messaging
@@ -604,8 +598,17 @@ export const AIScanner = () => {
                     anything reading the markup, but letting the browser
                     enforce type="url" would start rejecting the bare domains
                     this has always accepted. */}
+                <h1 className="text-4xl md:text-5xl font-bold text-foreground leading-tight mb-5">
+                  Can an AI agent fill in your form?
+                </h1>
+
+                <p className="text-lg text-muted-foreground leading-relaxed mb-8">
+                  Agents are starting to book, buy and sign up for real people. When one
+                  cannot read your form, that is a customer you never hear about.
+                </p>
+
                 <form
-                  className="space-y-6"
+                  className="space-y-4"
                   // A real submission path, not a decorative one: /api/scan
                   // accepts form-encoded bodies, so an agent that submits
                   // this natively starts a scan and gets the job id back.
@@ -693,11 +696,31 @@ export const AIScanner = () => {
                         type="submit"
                       >
                         <Scan className="h-5 w-5" />
-                        Full AI Scan
+                        {/* Was "Full AI Scan", which contradicted the options
+                            immediately below it reading "single page". */}
+                        Scan my form
                       </Button>
                     </div>
                   </div>
 
+                  {/* Both options behind a disclosure, with their current
+                      state in the summary. Two toggles above the fold were
+                      two decisions a first-time visitor had no basis to make.
+                      A native <details> keeps them in the DOM and in the
+                      form, so a native submit still carries their values. */}
+                  <details className="group rounded-lg border border-border/30 bg-muted/20">
+                    <summary className="cursor-pointer list-none px-4 py-3 text-sm text-muted-foreground hover:text-foreground">
+                      <span className="inline-flex items-center gap-2">
+                        <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
+                        Options
+                        <span className="text-muted-foreground/70">
+                          &mdash; {fullCrawl ? 'entire site' : 'single page'} &middot;{' '}
+                          {MODEL_PROVIDER_DETAILS[modelProvider].label}
+                        </span>
+                      </span>
+                    </summary>
+
+                    <div className="space-y-4 p-4 pt-1">
                   {/* Full Website Crawl Toggle.
                       Grouped in markup, not just visually: the card reads as
                       a group on screen, but without a fieldset that grouping
@@ -832,6 +855,8 @@ export const AIScanner = () => {
                     </div>
                     </div>
                   </fieldset>
+                    </div>
+                  </details>
 
                   {/* Dev Mode lives in the header, outside this form, so a
                       native submit would otherwise silently lose it and run
@@ -843,58 +868,22 @@ export const AIScanner = () => {
                     value={isDevMode ? 'true' : 'false'}
                   />
 
-                  {/* Description based on mode */}
-                  <div className="text-sm space-y-3">
-                    <p className="text-slate-300 font-medium">🤖 AI agent will {fullCrawl ? "autonomously" : "systematically"}:</p>
-                    <div className="space-y-2">
-                      {fullCrawl ? (
-                        <>
-                          <div className="flex items-start gap-3 text-slate-400">
-                            <div className="w-1 h-1 bg-violet-500 rounded-full mt-2 flex-shrink-0"></div>
-                            <span>Fetch sitemap.xml and discover all pages</span>
-                          </div>
-                          <div className="flex items-start gap-3 text-slate-400">
-                            <div className="w-1 h-1 bg-violet-500 rounded-full mt-2 flex-shrink-0"></div>
-                            <span>Visit every discoverable page on the domain</span>
-                          </div>
-                          <div className="flex items-start gap-3 text-slate-400">
-                            <div className="w-1 h-1 bg-violet-500 rounded-full mt-2 flex-shrink-0"></div>
-                            <span>Extract and analyze all forms for AI agent compatibility</span>
-                          </div>
-                          <div className="flex items-start gap-3 text-slate-400">
-                            <div className="w-1 h-1 bg-violet-500 rounded-full mt-2 flex-shrink-0"></div>
-                            <span>Test form filling and validation</span>
-                          </div>
-                          <div className="flex items-start gap-3 text-slate-400">
-                            <div className="w-1 h-1 bg-violet-500 rounded-full mt-2 flex-shrink-0"></div>
-                            <span>Generate comprehensive AI-friendly analysis report</span>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="flex items-start gap-3 text-slate-400">
-                            <div className="w-1 h-1 bg-slate-500 rounded-full mt-2 flex-shrink-0"></div>
-                            <span>Analyze the provided URL only</span>
-                          </div>
-                          <div className="flex items-start gap-3 text-slate-400">
-                            <div className="w-1 h-1 bg-slate-500 rounded-full mt-2 flex-shrink-0"></div>
-                            <span>Extract and analyze all forms on that page</span>
-                          </div>
-                          <div className="flex items-start gap-3 text-slate-400">
-                            <div className="w-1 h-1 bg-slate-500 rounded-full mt-2 flex-shrink-0"></div>
-                            <span>Test form accessibility and AI compatibility</span>
-                          </div>
-                          <div className="flex items-start gap-3 text-slate-400">
-                            <div className="w-1 h-1 bg-slate-500 rounded-full mt-2 flex-shrink-0"></div>
-                            <span>Generate focused page analysis report</span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
                 </form>
-              </CardContent>
-            </Card>
+              </div>
+
+              <div className="rounded-xl border border-border/50 bg-card/40 backdrop-blur-sm p-4 shadow-glow">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
+                  What you get
+                </p>
+
+                <FormPreviewIllustration />
+
+                <p className="text-sm text-muted-foreground mt-3 text-left">
+                  Every problem marked on a screenshot of your own form, with the fix
+                  written out field by field.
+                </p>
+              </div>
+            </div>
           )}
 
           {/* Scan Progress */}
@@ -1136,27 +1125,37 @@ export const AIScanner = () => {
                 <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Bot className="h-8 w-8 text-primary" />
                 </div>
-                <h3 className="text-xl font-semibold mb-2">AI-Powered Analysis</h3>
-                <p className="text-muted-foreground">GPT-5 driven autonomous crawling with intelligent decision making</p>
+                {/* Said "GPT-5 driven autonomous crawling" long after the
+                    analysis moved to Muse. Outcomes now, not plumbing. */}
+                <h3 className="text-xl font-semibold mb-2">See it like an agent does</h3>
+                <p className="text-muted-foreground">
+                  Your form, screenshotted and marked up at every point it breaks down
+                </p>
               </div>
               <div className="text-center">
                 <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Scan className="h-8 w-8 text-accent" />
                 </div>
-                <h3 className="text-xl font-semibold mb-2">Complete Coverage</h3>
-                <p className="text-muted-foreground">Systematic scanning of every discoverable page using sitemaps and link discovery</p>
+                <h3 className="text-xl font-semibold mb-2">A fix for every finding</h3>
+                <p className="text-muted-foreground">
+                  The attribute to add and the field to add it to, not "improve accessibility"
+                </p>
               </div>
               <div className="text-center">
                 <div className="w-16 h-16 bg-primary-glow/20 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Zap className="h-8 w-8 text-primary-glow" />
                 </div>
-                <h3 className="text-xl font-semibold mb-2">Real-time Updates</h3>
-                <p className="text-muted-foreground">Live progress tracking with WebSocket updates and detailed reporting</p>
+                {/* "Live progress tracking with WebSocket updates" described
+                    our transport to someone who does not have one. */}
+                <h3 className="text-xl font-semibold mb-2">Scored out of 100</h3>
+                <p className="text-muted-foreground">
+                  One number to track, and the eight categories that produced it
+                </p>
               </div>
             </div>
           )}
         </div>
       </div>
-    </div>
+    </>
   );
 };
