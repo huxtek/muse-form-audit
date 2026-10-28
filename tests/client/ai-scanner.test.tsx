@@ -436,13 +436,14 @@ describe('AIScanner sample report', () => {
 
   const entryPoints = () => screen.getAllByRole('button', { name: /sample report/i });
 
-  it('offers two ways in, so it is not missed', () => {
-    // A link buried under the options was the least noticeable thing on the
-    // page. The example panel is now the way in, with a text link as backup
-    // for anyone reading left to right who never reaches it.
+  it('offers exactly one way in, on the panel that explains it', () => {
+    // It was a buried link, then a link plus a panel button, which was the
+    // same action twice within a few hundred pixels. One button, on the
+    // thing that does the explaining.
     renderScanner();
 
-    expect(entryPoints().length).toBeGreaterThanOrEqual(2);
+    expect(entryPoints()).toHaveLength(1);
+    expect(entryPoints()[0]).toHaveTextContent(/see a full sample report/i);
   });
 
   it('asks the demo endpoint, not a scan of a made-up URL', async () => {
@@ -490,13 +491,11 @@ describe('AIScanner sample report', () => {
     expect(screen.getByText(/not a real audit/i)).toBeInTheDocument();
   });
 
-  it('never submits the form from either entry point', () => {
+  it('never submits the form', () => {
     renderScanner();
 
     // A submit-type button here would run a real scan on whatever was typed.
-    for (const button of entryPoints()) {
-      expect(button).toHaveAttribute('type', 'button');
-    }
+    expect(entryPoints()[0]).toHaveAttribute('type', 'button');
   });
 
   it('offers the sample when someone submits with no URL', async () => {

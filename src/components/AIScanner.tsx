@@ -302,7 +302,9 @@ export const AIScanner = () => {
       // screen reader user who looked away, can read it. And this is the
       // moment someone is most likely to want the sample, so offer it rather
       // than only refusing.
-      setUrlError('Enter a website URL to scan, or try the sample report below.');
+      // No direction given: the sample button sits beside the form on a wide
+      // screen and below it on a narrow one.
+      setUrlError('Enter a website URL to scan, or try the sample report.');
       toast({
         title: "Please enter a URL",
         description: "Enter a website URL, or see the sample report if you do not have one to hand",
@@ -969,17 +971,6 @@ export const AIScanner = () => {
                     </div>
                   </details>
 
-                  {/* Second route to the same thing, for anyone reading left
-                      to right who never reaches the panel on the right.
-                      type="button" so it never submits the form. */}
-                  <button
-                    type="button"
-                    onClick={showSampleReport}
-                    className="text-sm font-medium text-sky-400 hover:text-sky-300 underline-offset-4 hover:underline"
-                  >
-                    No site to hand? See a sample report instead
-                  </button>
-
                   {/* Dev Mode lives in the header, outside this form, so a
                       native submit would otherwise silently lose it and run
                       a real scan against someone's site. */}
@@ -1005,15 +996,21 @@ export const AIScanner = () => {
                   written out field by field.
                 </p>
 
-                {/* The panel already does the work of explaining the product,
-                    so it should be the way in. A link buried under the options
-                    was the least likely thing on the page to be noticed. */}
+                {/* The only way in, and the right one: the panel already does
+                    the work of explaining the product, so the button that
+                    delivers it belongs here. A second one beside the input
+                    was the same action twice within a few hundred pixels,
+                    competing with the primary for attention.
+                    
+                    Lighter border and a surface of its own so it reads as a
+                    button against the panel behind it. The default outline
+                    on this dark theme is nearly borderless, which is how the
+                    first version of this ended up looking like a link. */}
                 <Button
                   type="button"
                   variant="outline"
-                  size="sm"
                   onClick={showSampleReport}
-                  className="mt-4 w-full"
+                  className="mt-4 w-full border-border bg-muted/50 text-foreground hover:bg-muted hover:text-foreground"
                 >
                   <Eye className="h-4 w-4 mr-2" />
                   See a full sample report
