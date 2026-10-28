@@ -396,3 +396,102 @@ describe('FormVisualOverlay legend and footnotes', () => {
     expect(screen.getByText(/cropped/i)).toBeInTheDocument();
   });
 });
+
+describe('FormVisualOverlay tooltip overflow', () => {
+  /** Five findings on one control, deliberately not in severity order. */
+  const crowdedForm = () =>
+    buildForm({
+      accessibility: {
+        fieldIssues: [
+          { field: 'custname', severity: 'medium', issue: 'Medium one' },
+          { field: 'custname', severity: 'low', issue: 'Low one' },
+          { field: 'custname', severity: 'high', issue: 'The high one' },
+          { field: 'custname', severity: 'low', issue: 'Low two' },
+          { field: 'custname', severity: 'medium', issue: 'Medium two' }
+        ]
+      }
+    });
+
+  const openTooltip = () => {
+    const highlight = screen.getAllByRole('button', { name: /finding.*custname/i })[0];
+    fireEvent.mouseEnter(highlight);
+  };
+
+  it('shows at most three findings in the tooltip', () => {
+    // A control with six findings would make the tooltip taller than the
+    // capture it floats over, which is the clipping this had to be fixed for.
+    render(<FormVisualOverlay form={crowdedForm()} jobId="job-1" />);
+    loadImage();
+    openTooltip();
+
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip.querySelectorAll('li')).toHaveLength(3);
+  });
+
+  it('shows the worst findings, not the first three given', () => {
+    // The box is painted for the worst severity, so hiding the high finding
+    // behind "+2 more" would contradict the colour the user is looking at.
+    render(<FormVisualOverlay form={crowdedForm()} jobId="job-1" />);
+    loadImage();
+    openTooltip();
+
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip).toHaveTextContent('The high one');
+    // Both lows are the ones that drop off.
+    expect(tooltip).not.toHaveTextContent('Low one');
+    expect(tooltip).not.toHaveTextContent('Low two');
+  });
+
+  it('keeps the model ordering within a severity', () => {
+    render(<FormVisualOverlay form={crowdedForm()} jobId="job-1" />);
+    loadImage();
+    openTooltip();
+
+    const shown = [...screen.getByRole('tooltip').querySelectorAll('li')].map(
+      (li) => li.textContent
+    );
+
+    expect(shown[0]).toContain('The high one');
+    expect(shown[1]).toContain('Medium one');
+    expect(shown[2]).toContain('Medium two');
+  });
+
+  it('says how many are left and where to read them', () => {
+    render(<FormVisualOverlay form={crowdedForm()} jobId="job-1" />);
+    loadImage();
+    openTooltip();
+
+    expect(screen.getByRole('tooltip')).toHaveTextContent(
+      '+2 more in the findings list below'
+    );
+  });
+
+  it('adds no overflow line when everything fits', () => {
+    const form = buildForm({
+      accessibility: {
+        fieldIssues: [
+          { field: 'custname', severity: 'high', issue: 'One' },
+          { field: 'custname', severity: 'low', issue: 'Two' }
+        ]
+      }
+    });
+
+    render(<FormVisualOverlay form={form} jobId="job-1" />);
+    loadImage();
+    openTooltip();
+
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip.querySelectorAll('li')).toHaveLength(2);
+    expect(tooltip).not.toHaveTextContent(/more in the findings list/i);
+  });
+
+  it('counts every finding on the badge, not one per control', () => {
+    // The badge used to read 1 on every control because the model packed
+    // each control's problems into a single entry.
+    render(<FormVisualOverlay form={crowdedForm()} jobId="job-1" />);
+    loadImage();
+
+    const highlight = screen.getAllByRole('button', { name: /finding.*custname/i })[0];
+    expect(highlight).toHaveTextContent('5');
+  });
+});

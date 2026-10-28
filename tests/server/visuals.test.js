@@ -1081,3 +1081,46 @@ describe('single-page mock fixture', () => {
     expect(scores.some((score) => score < 50)).toBe(true);
   });
 });
+
+describe('sample findings exercise the tooltip cap', () => {
+  it('gives one control more findings than a tooltip can hold', async () => {
+    // Dev Mode is the zero-key path, so the overflow case has to be
+    // reachable there. One finding per control never shows "+N more".
+    const { SAMPLE_FIELD_ISSUES } = await import(
+      '../../server/lib/visuals/sampleFormVisual.js'
+    );
+
+    const perControl = SAMPLE_FIELD_ISSUES.reduce((acc, issue) => {
+      acc[issue.field] = (acc[issue.field] ?? 0) + 1;
+
+      return acc;
+    }, {});
+
+    expect(Math.max(...Object.values(perControl))).toBeGreaterThan(3);
+  });
+
+  it('leaves those findings out of severity order on purpose', async () => {
+    const { SAMPLE_FIELD_ISSUES } = await import(
+      '../../server/lib/visuals/sampleFormVisual.js'
+    );
+
+    const crowded = Object.entries(
+      SAMPLE_FIELD_ISSUES.reduce((acc, issue) => {
+        acc[issue.field] = [...(acc[issue.field] ?? []), issue.severity];
+
+        return acc;
+      }, {})
+    ).find(([, severities]) => severities.length > 3);
+
+    expect(crowded).toBeDefined();
+
+    const [, severities] = crowded;
+    const ranked = severities.map((severity) => SEVERITIES.indexOf(severity));
+    const sorted = [...ranked].sort((a, b) => a - b);
+
+    // Pre-sorted sample data would let a broken sort look correct: the worst
+    // finding must have to be MOVED to the front to be shown.
+    expect(ranked).not.toEqual(sorted);
+    expect(severities).toContain('high');
+  });
+});

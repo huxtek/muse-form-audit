@@ -115,6 +115,36 @@ export const SAMPLE_FIELD_ISSUES = [
     severity: 'medium',
     issue: 'No pattern or inputmode, so the expected telephone format is unguessable.'
   },
+  /**
+   * phoneNumber deliberately carries five findings, of mixed severity and
+   * out of severity order.
+   *
+   * One finding per control is the easy case. A control with more findings
+   * than a floating tooltip can hold is the one that needs proving: the
+   * tooltip has to show the worst three and defer the rest to the list
+   * below, and it must not hide this 'high' entry behind "+2 more" while
+   * painting the box red for it.
+   */
+  {
+    field: 'phoneNumber',
+    severity: 'low',
+    issue: 'No autocomplete="tel", so a browser or agent cannot fill it from a saved profile.'
+  },
+  {
+    field: 'phoneNumber',
+    severity: 'high',
+    issue: 'Marked required visually with an asterisk but carries no required attribute, so an agent cannot tell it is mandatory.'
+  },
+  {
+    field: 'phoneNumber',
+    severity: 'low',
+    issue: 'No aria-describedby pointing at the format hint printed beneath the field.'
+  },
+  {
+    field: 'phoneNumber',
+    severity: 'medium',
+    issue: 'type="text" rather than type="tel", so a mobile agent gets the wrong keypad and no format validation.'
+  },
   {
     field: 'subject',
     severity: 'low',

@@ -59,6 +59,8 @@ Rules:
 - Do not pad the lists. Fewer, sharper items are better than many vague ones.
 - "formFindings" is for problems that belong to the form as a whole and name no single control -- grouping, visual versus DOM order, an unclear heading. Do not put a control-specific problem here; it belongs in fieldIssues. Leave the array empty if there is nothing to say.
 - "fieldIssues" attributes problems to individual controls so they can be highlighted on a screenshot of the form. This is important: for every control with a problem, add an entry whose "field" is EXACTLY the control's name attribute, or its id if it has no name. Copy the value character for character from the HTML -- do not paraphrase, pluralise, or describe it. If several controls share a name (radio or checkbox groups), one entry for that name is enough. Omit controls that have no problem. Severity must be "high", "medium" or "low".
+- ONE PROBLEM PER ENTRY. If a control has three problems, write three separate entries for it, each with its own severity. Do NOT chain several problems into one string with commas or semicolons: "no name, no id, and no label; an agent cannot target it" is three findings crammed into one and must be split. Each entry is shown as its own bullet, so one entry holding three problems renders as a paragraph and cannot be given a severity that fits all of it.
+- Keep each entry to ONE SENTENCE: the problem and what it costs an agent. The problem alone ("no name attribute") leaves the reader to infer why it matters; three problems together cannot be read at a glance.
 
 Return exactly this JSON structure:
 {
@@ -75,7 +77,8 @@ Return exactly this JSON structure:
   "issues": ["top-level issues, worst first"],
   "recommendations": ["concrete fixes"],
   "fieldIssues": [
-    { "field": "exact-name-or-id", "severity": "high", "issue": "what an AI agent gets wrong about this control" }
+    { "field": "exact-name-or-id", "severity": "high", "issue": "one problem with this control, and what it costs an agent" },
+    { "field": "exact-name-or-id", "severity": "low", "issue": "a SECOND, separate problem with the SAME control goes in its own entry like this" }
   ],
   "formFindings": [
     { "severity": "medium", "issue": "a problem with the form as a whole that belongs to no single control, e.g. visual order disagreeing with DOM order" }

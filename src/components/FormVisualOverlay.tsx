@@ -9,6 +9,14 @@ import type { AnalyzedForm, FieldIssue, IssueSeverity, VisualField } from "@/lib
 const NARROW_BOX = 44;
 
 /**
+ * Findings shown in a floating tooltip before it defers to the list below.
+ *
+ * Three keeps the tooltip around 110px plus its header, which stays clear
+ * even over the 132px-tall wide capture that caused the original clipping.
+ */
+const TOOLTIP_ISSUE_LIMIT = 3;
+
+/**
  * Renders a captured form screenshot with one highlight per control that has a
  * finding, so an issue can be seen in place rather than read from a list.
  *
@@ -184,14 +192,28 @@ export const FormVisualOverlay = ({
           </Badge>
         </div>
 
+        {/* Capped, because a control with six findings would produce a
+            tooltip taller than the capture it floats over -- the clipping
+            this component already had to be fixed for once. The findings
+            list below the screenshot carries every one of them, so nothing
+            is lost by stopping here. */}
         <ul className="space-y-2">
-          {entry.issues.map((issue, index) => (
+          {entry.issues.slice(0, TOOLTIP_ISSUE_LIMIT).map((issue, index) => (
             <li key={index} className="text-xs text-muted-foreground flex gap-2">
               <AlertTriangle className={`h-3 w-3 mt-0.5 shrink-0 ${SEVERITY_STYLES[issue.severity].text}`} />
               <span>{issue.issue}</span>
             </li>
           ))}
         </ul>
+
+        {entry.issues.length > TOOLTIP_ISSUE_LIMIT && (
+          // Plain text, not a control: this tooltip is pointer-events-none by
+          // design, so anything clickable here would either be dead or would
+          // start swallowing clicks meant for the image again.
+          <p className="mt-2 text-xs font-medium text-foreground">
+            +{entry.issues.length - TOOLTIP_ISSUE_LIMIT} more in the findings list below
+          </p>
+        )}
       </div>
     );
   }
@@ -355,7 +377,12 @@ export const FormVisualOverlay = ({
         identifier,
         label: field.name || field.id,
         field,
-        issues,
+        // Worst first, so a capped tooltip never hides the high-severity
+        // finding behind "+2 more" while the box is painted red for it.
+        // Stable within a severity, keeping the model's own ordering.
+        issues: [...issues].sort(
+          (a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity)
+        ),
         severity: worstSeverity(issues)
       });
     });
