@@ -608,6 +608,15 @@ export const AIScanner = () => {
                   {/* URL Input */}
                   <div className="flex flex-col md:flex-row gap-4">
                     <div className="flex-1 relative">
+                      {/* A real label, associated by `for`, rather than an
+                          aria-label: the association is then in the markup
+                          itself. Visually hidden because the placeholder and
+                          the card title already carry it on screen. Wording
+                          matches what screen readers already announced. */}
+                      <label htmlFor="muse-form-audit-url-input" className="sr-only">
+                        Website URL for AI form analysis
+                      </label>
+
                       <Input
                         type="url"
                         placeholder="https://example.com"
@@ -622,7 +631,6 @@ export const AIScanner = () => {
                         data-ai-description="Enter website URL to analyze forms for AI agent compatibility"
                         data-ai-expected-format="https://example.com"
                         data-ai-validation="url"
-                        aria-label="Website URL for AI form analysis"
                         aria-describedby={
                           urlError ? 'url-input-error url-input-description' : 'url-input-description'
                         }
@@ -668,8 +676,16 @@ export const AIScanner = () => {
                     </div>
                   </div>
 
-                  {/* Full Website Crawl Toggle */}
-                  <div className="relative p-4 rounded-lg border transition-all duration-200 bg-muted/30 border-border/30">
+                  {/* Full Website Crawl Toggle.
+                      Grouped in markup, not just visually: the card reads as
+                      a group on screen, but without a fieldset that grouping
+                      has to be inferred from layout. min-w-0 and the reset
+                      keep the fieldset from drawing its own box or breaking
+                      the flex layout inside it. */}
+                  <fieldset className="min-w-0 border-0 p-0 m-0">
+                    <legend className="sr-only">Scan scope</legend>
+
+                    <div className="relative p-4 rounded-lg border transition-all duration-200 bg-muted/30 border-border/30">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4 flex-1">
                           <div className={`p-2 rounded-lg ${
@@ -721,9 +737,13 @@ export const AIScanner = () => {
                         />
                       </div>
                     </div>
+                  </fieldset>
 
                   {/* Analysis model switch */}
-                  <div className="relative p-4 rounded-lg border transition-all duration-200 bg-muted/30 border-border/30">
+                  <fieldset className="min-w-0 border-0 p-0 m-0">
+                    <legend className="sr-only">Analysis model</legend>
+
+                    <div className="relative p-4 rounded-lg border transition-all duration-200 bg-muted/30 border-border/30">
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center space-x-4 flex-1">
                         <div className="p-2 rounded-lg bg-sky-500/20 text-sky-400">
@@ -769,7 +789,8 @@ export const AIScanner = () => {
                         ))}
                       </div>
                     </div>
-                  </div>
+                    </div>
+                  </fieldset>
 
                   {/* Description based on mode */}
                   <div className="text-sm space-y-3">
