@@ -1,9 +1,69 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { AIScanner } from '@/components/AIScanner';
 import { DevModeProvider } from '@/contexts/DevModeContext';
 import { formAPI } from '@/services/api';
+
+/** Puts the address bar on screen so navigation can be asserted. */
+const LocationProbe = () => {
+  const { pathname, search } = useLocation();
+
+  return <output data-testid="location">{`${pathname}${search}`}</output>;
+};
+
+/** Real history navigation, so Back is tested rather than approximated. */
+const BackButton = () => {
+  const navigate = useNavigate();
+
+  return (
+    <button type="button" onClick={() => navigate(-1)}>
+      test-back
+    </button>
+  );
+};
+
+const ForwardButton = () => {
+  const navigate = useNavigate();
+
+  return (
+    <button type="button" onClick={() => navigate(1)}>
+      test-forward
+    </button>
+  );
+};
+
+/**
+ * The scanner reads and writes the query string, so it needs a router in the
+ * tree. Starting from a path also lets a test arrive the way a visitor
+ * following a shared link does, which is where the interesting behaviour is.
+ */
+const renderScanner = (path = '/') =>
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <DevModeProvider>
+        <AIScanner />
+        <LocationProbe />
+        <BackButton />
+        <ForwardButton />
+      </DevModeProvider>
+    </MemoryRouter>
+  );
+
+const location = () => screen.getByTestId('location').textContent;
+
+const goBack = async () => {
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'test-back' }));
+  });
+};
+
+const goForward = async () => {
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'test-forward' }));
+  });
+};
 
 /**
  * Two failure modes that would ship unnoticed:
@@ -44,11 +104,7 @@ const jobRecord = (overrides: Record<string, unknown> = {}) => ({
 
 /** Render the scanner, submit a URL, and settle the initial poll. */
 const submitScan = async () => {
-  render(
-    <DevModeProvider>
-      <AIScanner />
-    </DevModeProvider>
-  );
+  renderScanner();
 
   fireEvent.change(screen.getByLabelText('Website URL for AI form analysis'), {
     target: { value: 'https://example.com' }
@@ -181,11 +237,7 @@ describe('AIScanner mock-data labelling', () => {
 
 describe('AIScanner input validation', () => {
   it('does not call the backend without a URL', async () => {
-    render(
-      <DevModeProvider>
-        <AIScanner />
-      </DevModeProvider>
-    );
+    renderScanner();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Start AI form analysis' }));
@@ -195,11 +247,7 @@ describe('AIScanner input validation', () => {
   });
 
   it('does not call the backend for a malformed URL', async () => {
-    render(
-      <DevModeProvider>
-        <AIScanner />
-      </DevModeProvider>
-    );
+    renderScanner();
 
     fireEvent.change(screen.getByLabelText('Website URL for AI form analysis'), {
       target: { value: 'not a url' }
@@ -219,13 +267,6 @@ describe('AIScanner input validation', () => {
  * div with a click handler is the one bug we cannot ship.
  */
 describe('AIScanner own-form compatibility', () => {
-  const renderScanner = () =>
-    render(
-      <DevModeProvider>
-        <AIScanner />
-      </DevModeProvider>
-    );
-
   const urlField = () => screen.getByLabelText('Website URL for AI form analysis');
 
   it('submits on Enter in the URL field', async () => {
@@ -353,13 +394,6 @@ describe('AIScanner own-form compatibility', () => {
  * name in the largest type on the page.
  */
 describe('AIScanner landing page', () => {
-  const renderScanner = () =>
-    render(
-      <DevModeProvider>
-        <AIScanner />
-      </DevModeProvider>
-    );
-
   it('leads with what the visitor cannot answer, not the product name', () => {
     renderScanner();
 
@@ -427,13 +461,6 @@ describe('AIScanner landing page', () => {
 });
 
 describe('AIScanner sample report', () => {
-  const renderScanner = () =>
-    render(
-      <DevModeProvider>
-        <AIScanner />
-      </DevModeProvider>
-    );
-
   const entryPoints = () => screen.getAllByRole('button', { name: /sample report/i });
 
   it('offers exactly one way in, on the panel that explains it', () => {
@@ -512,13 +539,6 @@ describe('AIScanner sample report', () => {
 });
 
 describe('AIScanner submit feedback', () => {
-  const renderScanner = () =>
-    render(
-      <DevModeProvider>
-        <AIScanner />
-      </DevModeProvider>
-    );
-
   const urlField = () => screen.getByLabelText('Website URL for AI form analysis');
   const scanButton = () => screen.getByRole('button', { name: 'Start AI form analysis' });
 
@@ -616,5 +636,166 @@ describe('AIScanner submit feedback', () => {
     expect(startDemoMock).toHaveBeenCalledTimes(1);
     expect(sample).toBeDisabled();
     expect(sample).toHaveTextContent(/loading sample/i);
+  });
+});
+
+/**
+ * The report used to be a state flip on `/`, so the address bar read the same
+ * whether you were looking at the form or at a finished audit. People took
+ * the report for its own page, pressed Back to get at the form, and left the
+ * site. These pin the two views to two addresses.
+ */
+describe('AIScanner scan route', () => {
+  const urlField = () => screen.getByLabelText('Website URL for AI form analysis');
+  const submit = () => screen.getByRole('button', { name: 'Start AI form analysis' });
+
+  const scanFor = async (value: string) => {
+    fireEvent.change(urlField(), { target: { value } });
+
+    await act(async () => {
+      fireEvent.click(submit());
+    });
+  };
+
+  it('puts the target in the address bar when a scan starts', async () => {
+    startScanMock.mockResolvedValue({ jobId: 'job-1' });
+    getReportMock.mockResolvedValue(jobRecord());
+    renderScanner();
+
+    expect(location()).toBe('/');
+
+    await scanFor('https://example.com');
+
+    expect(location()).toBe('/scan?url=https%3A%2F%2Fexample.com');
+  });
+
+  it('carries the options that are not at their defaults', async () => {
+    startScanMock.mockResolvedValue({ jobId: 'job-1' });
+    getReportMock.mockResolvedValue(jobRecord());
+    renderScanner();
+
+    fireEvent.click(screen.getByRole('switch'));
+    await scanFor('https://example.com');
+
+    expect(location()).toContain('fullCrawl=1');
+  });
+
+  it('prefills a shared link without scanning anything', async () => {
+    renderScanner('/scan?url=https%3A%2F%2Fexample.com');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // The whole point: opening someone else's link must not aim the crawler
+    // at their site, spend a rate-limit slot or run up a model bill on the
+    // strength of a click nobody made.
+    expect(urlField()).toHaveValue('https://example.com');
+    expect(startScanMock).not.toHaveBeenCalled();
+    expect(submit()).toHaveTextContent(/scan my form/i);
+  });
+
+  it('restores the options from a shared link', async () => {
+    renderScanner('/scan?url=https%3A%2F%2Fexample.com&fullCrawl=1&modelProvider=heuristic');
+
+    expect(screen.getByRole('switch')).toBeChecked();
+    expect(screen.getByRole('radio', { name: /heuristic/i })).toBeChecked();
+  });
+
+  it('runs the sample for someone who arrives at the demo address', async () => {
+    startDemoMock.mockResolvedValue({ jobId: 'job-1' });
+    getReportMock.mockResolvedValue(
+      jobRecord({ status: 'running', devMode: true, isSampleData: true })
+    );
+
+    renderScanner('/scan?url=demo');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // The one target that runs unasked: it touches no third party, spends no
+    // rate-limit slot and calls no model.
+    expect(startDemoMock).toHaveBeenCalledTimes(1);
+    expect(startScanMock).not.toHaveBeenCalled();
+  });
+
+  it('never prefills the field with the demo token', () => {
+    startDemoMock.mockResolvedValue({ jobId: 'job-1' });
+    getReportMock.mockResolvedValue(jobRecord());
+
+    // Read on arrival, before the deferred sample load replaces the form:
+    // `demo` is not a URL, so a prefilled field would fail validation the
+    // moment anyone pressed Scan.
+    renderScanner('/scan?url=demo');
+
+    expect(urlField()).toHaveValue('');
+  });
+
+  it('shows the form again when Back leaves the report', async () => {
+    startScanMock.mockResolvedValue({ jobId: 'job-1' });
+    getReportMock.mockResolvedValue(jobRecord({ status: 'completed', progress: 100 }));
+    renderScanner();
+
+    await scanFor('https://example.com');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    });
+
+    expect(screen.queryByLabelText('Website URL for AI form analysis')).not.toBeInTheDocument();
+
+    await goBack();
+
+    expect(location()).toBe('/');
+    expect(urlField()).toBeInTheDocument();
+  });
+
+  it('brings the report back on Forward rather than binning it', async () => {
+    startScanMock.mockResolvedValue({ jobId: 'job-1' });
+    getReportMock.mockResolvedValue(jobRecord({ status: 'completed', progress: 100 }));
+    renderScanner();
+
+    await scanFor('https://example.com');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    });
+
+    await goBack();
+    await goForward();
+
+    expect(location()).toBe('/scan?url=https%3A%2F%2Fexample.com');
+    expect(screen.queryByLabelText('Website URL for AI form analysis')).not.toBeInTheDocument();
+  });
+
+  it('sends New Scan back to a blank form at the root', async () => {
+    startScanMock.mockResolvedValue({ jobId: 'job-1' });
+    getReportMock.mockResolvedValue(jobRecord({ status: 'completed', progress: 100 }));
+    renderScanner();
+
+    await scanFor('https://example.com');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /new scan/i }));
+    });
+
+    // Unlike Back, this one means start from nothing.
+    expect(location()).toBe('/');
+    expect(urlField()).toHaveValue('');
+  });
+
+  it('does not navigate when the URL is rejected', async () => {
+    renderScanner();
+
+    await scanFor('not a url');
+
+    // A rejected URL must not strand someone on a scan address with no scan.
+    expect(location()).toBe('/');
+    expect(startScanMock).not.toHaveBeenCalled();
   });
 });

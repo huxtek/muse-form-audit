@@ -7,9 +7,16 @@ import { Badge } from "@/components/ui/badge";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Bot, Scan, Download, ExternalLink, AlertTriangle, CheckCircle, ChevronRight, Clock, Loader2, Zap, Globe, FileText, FlaskConical, Sparkles, Eye } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useDevMode } from "@/contexts/DevModeContext";
 import { getScanUrl, getWebSocketUrl } from "@/lib/api-config";
+import {
+  buildDemoPath,
+  buildScanPath,
+  parseScanParams,
+  SCAN_DEMO_TARGET
+} from "@/lib/scan-url";
 import FormPreviewIllustration from "@/components/FormPreviewIllustration";
 import { formAPI } from "@/services/api";
 import { PDFGenerator } from "@/lib/pdf-generator";
@@ -97,14 +104,54 @@ interface PerFormProgress {
 const createImmediateScanId = () => `scan-${Date.now()}`;
 
 export const AIScanner = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const { target: scanTarget, isDemo } = parseScanParams(searchParams);
+
   // Named apart from the local `url` inside startAIScan, which shadows it
   // when the sample report supplies its own target.
-  const [urlFromState, setUrl] = useState("");
-  const [fullCrawl, setFullCrawl] = useState(false); // Default OFF as requested
-  const [modelProvider, setModelProvider] = useState<ModelProvider>(DEFAULT_MODEL_PROVIDER);
+  //
+  // Seeded from the query string rather than synced to it: a shared
+  // `/scan?url=example.com` arrives as a fresh mount, which is the only
+  // moment the field needs to follow the address bar. Every later change
+  // comes from someone typing, and an effect copying the param back over
+  // the top would fight them for the field.
+  const [urlFromState, setUrl] = useState(() => parseScanParams(searchParams).url);
+  const [fullCrawl, setFullCrawl] = useState(
+    () => parseScanParams(searchParams).fullCrawl
+  );
+  const [modelProvider, setModelProvider] = useState<ModelProvider>(
+    () => parseScanParams(searchParams).modelProvider
+  );
   // Which form the visual tab is showing when there are too many to stack.
   const [selectedFormIndex, setSelectedFormIndex] = useState(0);
-  const [currentJob, setCurrentJob] = useState<ScanJob | null>(null);
+  /**
+   * The scan itself, and the target it belongs to.
+   *
+   * Kept as two pieces so which view is on screen can be *derived* from the
+   * address bar rather than kept in step with it. An effect that copied the
+   * query string into state would be a second source of truth, and the one
+   * that loses: it cannot run until after a render has already drawn the
+   * wrong thing.
+   */
+  const [jobState, setJobState] = useState<ScanJob | null>(null);
+  const [jobTarget, setJobTarget] = useState<string | null>(null);
+
+  /**
+   * The report is shown only while the address bar still names the scan that
+   * produced it.
+   *
+   * This is the whole Back-button fix, and it is a derivation rather than a
+   * reaction: going back to `/` leaves no target, so there is nothing to
+   * match and the form is what renders -- no state to clear, and no window
+   * in which a stale report could flash. Going forward again re-matches, so
+   * an interrupted scan is not needlessly thrown away.
+   */
+  const currentJob = jobTarget !== null && jobTarget === scanTarget ? jobState : null;
+
+  /** The demo target we have already auto-run, so it runs once per arrival. */
+  const demoRanForRef = useRef<string | null>(null);
   // The live socket is an external resource, not render input: nothing in the
   // JSX reads it, only `resetScan` needs a handle to close it. A ref keeps it
   // out of the render cycle, which is also what React's set-state-in-effect
@@ -204,7 +251,7 @@ export const AIScanner = () => {
             }
             
             // Regular progress update
-            setCurrentJob(prev => prev ? { 
+            setJobState(prev => prev ? { 
               ...prev, 
               ...update,
               formsFound: update.formsFound || prev.formsFound || 0,
@@ -301,7 +348,10 @@ export const AIScanner = () => {
       const started = await formAPI.startDemo();
 
       if (started?.jobId) {
-        setCurrentJob({
+        // Binds the sample to `?url=demo`, so it shows while that is the
+        // address and stops showing the moment it is not.
+        setJobTarget(SCAN_DEMO_TARGET);
+        setJobState({
           id: started.jobId,
           url: started.url ?? SAMPLE_REPORT_URL,
           status: 'queued',
@@ -329,6 +379,80 @@ export const AIScanner = () => {
       endStart();
     }
   };
+
+  /**
+   * Follows a queued job to completion.
+   *
+   * Declared ahead of the two callers that use it, against the usual
+   * step-down order, because both the sample and a real scan hand off to it
+   * and one of them is now reached from an effect -- where a reference to a
+   * `const` declared further down is an access before declaration.
+   */
+  const pollJobStatus = async (jobId: string) => {
+    try {
+      const job = await formAPI.getReport(jobId);
+      setJobState(job);
+
+      if (job.status === 'running' || job.status === 'queued') {
+        setTimeout(() => pollJobStatus(jobId), 2000);
+      }
+    } catch (error) {
+      console.error('Polling error:', error);
+    }
+  };
+
+  /**
+   * The sample is a destination as well as an action, so the button does
+   * both: it moves to `/scan?url=demo`, which makes the sample a link worth
+   * putting in a README, and starts the load itself.
+   *
+   * Claiming the ref first tells the arrival effect to stand down, so the
+   * two paths cannot both fire. Running it here rather than leaving it to
+   * that effect keeps the press acknowledged on the spot.
+   */
+  const handleShowSample = () => {
+    demoRanForRef.current = SCAN_DEMO_TARGET;
+    navigate(buildDemoPath());
+    void showSampleReport();
+  };
+
+  /**
+   * Loads the sample for someone who arrives at `/scan?url=demo` directly,
+   * by shared link or reload, rather than by pressing the button.
+   *
+   * `?url=demo` is the one target that runs unasked, and it can afford to:
+   * the fixture touches no third party, spends no rate-limit slot and calls
+   * no model. A real target is deliberately left alone -- opening someone's
+   * shared `/scan?url=their-site.com` must not aim our crawler at it, or run
+   * up a bill, on the strength of a click nobody made. Those arrive
+   * prefilled and wait to be started.
+   *
+   * The button does not come through here: it marks the ref and runs the
+   * load itself, so the click keeps its immediate feedback and this stands
+   * down. That leaves the effect responsible for arrivals only, which is the
+   * one case a handler cannot cover.
+   *
+   * Deferred by a timer rather than run inline because setting state in an
+   * effect's synchronous phase invites the cascading render React warns
+   * about. The ref guard, keyed on the target, is what holds it to one run
+   * per arrival.
+   */
+  useEffect(() => {
+    if (!isDemo || demoRanForRef.current === scanTarget) {
+      return;
+    }
+
+    demoRanForRef.current = scanTarget;
+
+    const timer = setTimeout(() => {
+      void showSampleReport();
+    }, 0);
+
+    return () => clearTimeout(timer);
+    // showSampleReport is redefined every render; the ref guard above, not
+    // the dependency list, is what keeps this to one run per arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDemo, scanTarget]);
 
   const startAIScan = async (overrides?: { url?: string; devMode?: boolean }) => {
     const url = overrides?.url ?? urlFromState;
@@ -368,6 +492,17 @@ export const AIScanner = () => {
       return;
     }
 
+    // Before the request, not after: the address bar is part of the
+    // acknowledgement that the click landed, and it should not wait on a
+    // round trip. The URL effect treats this as "a target was asked for",
+    // so it prefills over the top with identical values and leaves the job
+    // that is about to arrive alone.
+    navigate(buildScanPath({ url, fullCrawl, modelProvider }));
+
+    // Set alongside the navigation so the results, whenever they land, are
+    // bound to the address that asked for them.
+    setJobTarget(url);
+
     try {
       const scanResults = await formAPI.startScan({
         url,
@@ -379,7 +514,7 @@ export const AIScanner = () => {
       // Check if this is immediate results (our current backend) or job-based response
       if (scanResults.success && scanResults.scanType) {
         // Immediate results - create a completed job structure
-        setCurrentJob({
+        setJobState({
           id: createImmediateScanId(),
           url,
           status: 'completed',
@@ -399,7 +534,7 @@ export const AIScanner = () => {
         });
       } else if (scanResults.jobId) {
         // Job-based response - use polling
-        setCurrentJob({
+        setJobState({
           id: scanResults.jobId,
           url,
           status: 'queued',
@@ -437,19 +572,6 @@ export const AIScanner = () => {
       // Must clear on failure too, or a rejected scan leaves the button
       // spinning with no way back.
       endStart();
-    }
-  };
-
-  const pollJobStatus = async (jobId: string) => {
-    try {
-      const job = await formAPI.getReport(jobId);
-      setCurrentJob(job);
-
-      if (job.status === 'running' || job.status === 'queued') {
-        setTimeout(() => pollJobStatus(jobId), 2000);
-      }
-    } catch (error) {
-      console.error('Polling error:', error);
     }
   };
 
@@ -675,19 +797,28 @@ export const AIScanner = () => {
     }
   };
 
+  /**
+   * "New Scan" is a navigation, not a state reset.
+   *
+   * Clearing state here as well would leave the address bar still naming the
+   * old target while the form claimed otherwise. Going to `/` instead lets
+   * the URL effect do the clearing, which keeps one rule in force: what the
+   * query string says is what is on screen.
+   */
   const resetScan = () => {
-    setCurrentJob(null);
+    // Clearing the field here, in a handler, rather than reacting to the
+    // navigation: "New Scan" means start from nothing, whereas arriving at
+    // `/` with Back means "let me look at the form again" and should keep
+    // what was typed. Same destination, different intent.
     setUrl("");
-    setFullCrawl(false); // Reset to default OFF state
+    setFullCrawl(false);
+    setUrlError(null);
     setSelectedFormIndex(0);
     setPerFormProgress({
       formsFound: 0,
       formsAnalyzed: 0
     });
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
+    navigate("/");
   };
 
   const getStatusIcon = (status: string) => {
@@ -1072,7 +1203,7 @@ export const AIScanner = () => {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={showSampleReport}
+                  onClick={handleShowSample}
                   disabled={isStarting}
                   aria-busy={isStarting}
                   className="mt-4 w-full border-border bg-muted/50 text-foreground hover:bg-muted hover:text-foreground"

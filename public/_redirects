@@ -1,0 +1,12 @@
+# Single-page app fallback.
+#
+# The build emits one index.html and no file at /scan, so a static host asked
+# for /scan?url=example.com would 404 before any of our JavaScript runs.
+# Clicking through the app is unaffected -- React Router handles those in the
+# browser -- but a pasted link or a reload on /scan is exactly the case the
+# route exists to serve, so the host has to be told to hand back index.html
+# and let the client resolve the route.
+#
+# 200 rather than 301/302: the address bar must keep the path, or the router
+# has nothing to read.
+/*  /index.html  200
