@@ -16,6 +16,48 @@ import {
   screenshotStoreStats
 } from '../../server/lib/visuals/screenshotStore.js';
 import { normalizeFormAnalysis, SEVERITIES } from '../../server/lib/analysis/formAnalysisSchema.js';
+import { cropPng, readPngSize, stitchPngColumn } from '../../server/lib/visuals/cropImage.js';
+import { PNG } from 'pngjs';
+
+/** A real PNG of a given size, memoised because encoding is not free. */
+const pngCache = new Map();
+
+function solidPng(width, height, value = 255) {
+  const key = `${width}x${height}x${value}`;
+
+  if (!pngCache.has(key)) {
+    const png = new PNG({ width, height });
+    png.data.fill(value);
+    pngCache.set(key, PNG.sync.write(png));
+  }
+
+  return pngCache.get(key);
+}
+
+/** A PNG whose every pixel encodes its own row, so crops can be located. */
+function stripedPng(width, height) {
+  const png = new PNG({ width, height });
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const i = (width * y + x) << 2;
+      png.data[i] = y % 256;
+      png.data[i + 1] = x % 256;
+      png.data[i + 2] = 0;
+      png.data[i + 3] = 255;
+    }
+  }
+
+  return PNG.sync.write(png);
+}
+
+/** The pixel at a coordinate, as [r, g, b]. */
+function pixelAt(buffer, x, y) {
+  const png = PNG.sync.read(buffer);
+  const i = (png.width * y + x) << 2;
+
+  return [png.data[i], png.data[i + 1], png.data[i + 2]];
+}
 
 /**
  * The overlay draws boxes from these coordinates, so a wrong pairing puts a
@@ -335,11 +377,30 @@ describe('captureFormVisuals', () => {
     padding: 16
   };
 
-  /** A page stub returning fixed geometry and a fake PNG. */
-  const fakePage = ({ geometry, screenshot }) => ({
-    evaluate: vi.fn().mockResolvedValue(geometry),
-    screenshot: vi.fn(screenshot ?? (async () => Buffer.from('png-bytes')))
-  });
+  /**
+   * A page stub returning fixed geometry and a REAL png.
+   *
+   * It has to be a real image now: the capture takes unclipped viewport
+   * screenshots and crops them here, so it decodes whatever the page hands
+   * back. The old stub returned the bytes of the string "png-bytes", which is
+   * part of why a capture that painted nothing went unnoticed.
+   */
+  const fakePage = ({ geometry, screenshot, viewport = { width: 1280, height: 720 } }) => {
+    let reads = 0;
+
+    return {
+      evaluate: vi.fn(async (_fn, x = 0, y = 0) => {
+        reads += 1;
+
+        // The first call reads geometry; later ones are captureRegion
+        // scrolling the region into view and reading the position back.
+        return reads === 1
+          ? geometry
+          : { scrollX: Math.max(0, x), scrollY: Math.max(0, y), ...viewport };
+      }),
+      screenshot: vi.fn(screenshot ?? (async () => solidPng(viewport.width, viewport.height)))
+    };
+  };
 
   const geometryFor = (formRect, fields, pageSize = { width: 1280, height: 2000 }) => ({
     pageSize,
@@ -369,18 +430,16 @@ describe('captureFormVisuals', () => {
     expect(visual.padding).toEqual({ left: 16, top: 16, right: 16, bottom: 16 });
   });
 
-  it('clips from the padded origin and captures the padded size', async () => {
+  it('crops from the padded origin at the padded size', async () => {
     const page = fakePage({
       geometry: geometryFor({ x: 200, y: 300, width: 400, height: 200 }, [])
     });
 
     const [visual] = await captureFormVisuals(page, { limits: LIMITS, logger: silent });
 
-    expect(page.screenshot).toHaveBeenCalledWith(
-      expect.objectContaining({
-        clip: { x: 184, y: 284, width: 432, height: 232 }
-      })
-    );
+    // Unclipped, then cut down here. Asking Chrome for a clip drops the
+    // layer painting the form's background and returns a flat wash.
+    expect(page.screenshot).toHaveBeenCalledWith({ type: 'png' });
     expect(visual.width).toBe(432);
     expect(visual.height).toBe(232);
   });
@@ -398,19 +457,22 @@ describe('captureFormVisuals', () => {
 
     expect(visual.padding).toEqual({ left: 8, top: 0, right: 8, bottom: 16 });
     expect(visual.fields[0].rect).toEqual({ x: 117, y: 0, width: 185, height: 21 });
-    expect(page.screenshot).toHaveBeenCalledWith(
-      expect.objectContaining({ clip: { x: 0, y: 0, width: 1280, height: 616 } })
-    );
+    expect(visual.width).toBe(1280);
+    expect(visual.height).toBe(616);
   });
 
   it('flags truncation and clamps the capture for an oversized form', async () => {
     const page = fakePage({
-      geometry: geometryFor({ x: 0, y: 0, width: 500, height: 9000 }, [])
+      geometry: geometryFor({ x: 0, y: 0, width: 500, height: 9000 }, []),
+      viewport: { width: 1280, height: 2000 }
     });
 
     const [visual] = await captureFormVisuals(page, { limits: LIMITS, logger: silent });
 
-    expect(visual.height).toBe(LIMITS.maxFormHeight);
+    // The capture can only be as tall as the image it came from, so report
+    // what the image actually holds: scaling highlights against a height the
+    // image lacks misplaces every box.
+    expect(visual.height).toBe(2000);
     expect(visual.truncated).toBe(true);
   });
 
@@ -426,15 +488,16 @@ describe('captureFormVisuals', () => {
 
   it('reports the byte length and content type of the capture', async () => {
     const page = fakePage({
-      geometry: geometryFor({ x: 0, y: 0, width: 100, height: 100 }, []),
-      screenshot: async () => Buffer.alloc(1234)
+      geometry: geometryFor({ x: 0, y: 0, width: 100, height: 100 }, [])
     });
 
     const [visual] = await captureFormVisuals(page, { limits: LIMITS, logger: silent });
 
-    expect(visual.byteLength).toBe(1234);
     expect(visual.contentType).toBe('image/png');
     expect(Buffer.isBuffer(visual.screenshot)).toBe(true);
+    // The byte count must describe the cropped image that is actually stored,
+    // not the full viewport shot it was cut from.
+    expect(visual.byteLength).toBe(visual.screenshot.length);
   });
 
   it('skips a hidden form without attempting a screenshot', async () => {
@@ -466,7 +529,7 @@ describe('captureFormVisuals', () => {
         { name: 'custname', id: '', rect: { x: 1, y: 2, width: 3, height: 4 }, renderable: true }
       ]),
       screenshot: async () => {
-        throw new Error('clip outside document');
+        throw new Error('capture failed');
       }
     });
 
@@ -474,7 +537,7 @@ describe('captureFormVisuals', () => {
 
     // A failed capture must not lose the findings-to-control mapping.
     expect(visual.screenshot).toBeNull();
-    expect(visual.unavailableReason).toBe('clip outside document');
+    expect(visual.unavailableReason).toMatch(/could not be captured/);
     expect(visual.fields).toHaveLength(1);
   });
 
@@ -525,7 +588,10 @@ describe('captureFormVisuals', () => {
 
     expect(visuals).toHaveLength(3);
     expect(visuals.map((v) => v.formIndex)).toEqual([0, 1, 2]);
-    expect(page.screenshot).toHaveBeenCalledTimes(3);
+    // One page capture serves every form: it is the same image, cut three
+    // ways, which is both correct and cheaper than three requests.
+    expect(page.screenshot).toHaveBeenCalledOnce();
+    expect(visuals.every((v) => v.screenshot)).toBe(true);
   });
 });
 
@@ -808,5 +874,151 @@ describe('toFormGeometry', () => {
     };
 
     expect(toFormGeometry(resolved, PAGE, 8)).toMatchObject(resolved);
+  });
+});
+
+describe('cropPng', () => {
+  it('cuts the requested rectangle out of the source', () => {
+    const result = cropPng(stripedPng(200, 150), { x: 10, y: 20, width: 50, height: 40 });
+
+    expect(result.width).toBe(50);
+    expect(result.height).toBe(40);
+    expect(readPngSize(result.buffer)).toEqual({ width: 50, height: 40 });
+  });
+
+  it('takes the pixels from the right offset, not the origin', () => {
+    // The striped source encodes its row in red and column in green, so a
+    // crop that silently started at 0,0 would be caught here.
+    const result = cropPng(stripedPng(200, 150), { x: 30, y: 40, width: 10, height: 10 });
+
+    expect(pixelAt(result.buffer, 0, 0)).toEqual([40, 30, 0]);
+    expect(pixelAt(result.buffer, 5, 5)).toEqual([45, 35, 0]);
+  });
+
+  it('clamps a rectangle that overhangs the source', () => {
+    // A form at the very bottom of a page is normal, not an error.
+    const result = cropPng(stripedPng(100, 100), { x: 80, y: 90, width: 50, height: 50 });
+
+    expect(result.width).toBe(20);
+    expect(result.height).toBe(10);
+  });
+
+  it('rounds fractional coordinates rather than producing a broken image', () => {
+    const result = cropPng(stripedPng(100, 100), { x: 10.4, y: 20.6, width: 30.5, height: 10.2 });
+
+    expect(readPngSize(result.buffer)).toEqual({ width: 31, height: 10 });
+  });
+
+  it('throws when the rectangle lies entirely outside the source', () => {
+    expect(() => cropPng(stripedPng(50, 50), { x: 60, y: 60, width: 10, height: 10 })).toThrow(
+      /outside a 50x50 capture/
+    );
+  });
+});
+
+
+describe('expandViewportToPage', () => {
+  const silentLog = { log: () => {}, warn: () => {} };
+
+  /** A page that records viewport changes and reports a fixed page height. */
+  const resizablePage = ({ viewport, pageHeight }) => {
+    let current = viewport;
+
+    return {
+      calls: [],
+      viewport: () => current,
+      setViewport: vi.fn(async (next) => {
+        current = next;
+      }),
+      evaluate: vi.fn(async () => pageHeight)
+    };
+  };
+
+  it('grows the viewport to cover a page taller than it', async () => {
+    const { expandViewportToPage } = await import(
+      '../../server/lib/visuals/captureFormVisuals.js'
+    );
+    const page = resizablePage({ viewport: { width: 1280, height: 720 }, pageHeight: 4393 });
+
+    await expandViewportToPage(page, {
+      limits: { maxCaptureHeight: 8000, reflowSettleMs: 0 },
+      logger: silentLog
+    });
+
+    // The viewport has to BE the page: Chrome only paints an unclipped
+    // screenshot correctly, and many pages will not scroll on request.
+    expect(page.setViewport).toHaveBeenCalledWith({ width: 1280, height: 4393 });
+  });
+
+  it('caps the growth so one enormous page cannot exhaust memory', async () => {
+    const { expandViewportToPage } = await import(
+      '../../server/lib/visuals/captureFormVisuals.js'
+    );
+    const page = resizablePage({ viewport: { width: 1280, height: 720 }, pageHeight: 50000 });
+
+    await expandViewportToPage(page, {
+      limits: { maxCaptureHeight: 8000, reflowSettleMs: 0 },
+      logger: silentLog
+    });
+
+    expect(page.setViewport).toHaveBeenCalledWith({ width: 1280, height: 8000 });
+  });
+
+  it('leaves a page that already fits alone', async () => {
+    const { expandViewportToPage } = await import(
+      '../../server/lib/visuals/captureFormVisuals.js'
+    );
+    const page = resizablePage({ viewport: { width: 1280, height: 720 }, pageHeight: 500 });
+
+    await expandViewportToPage(page, {
+      limits: { maxCaptureHeight: 8000, reflowSettleMs: 0 },
+      logger: silentLog
+    });
+
+    expect(page.setViewport).not.toHaveBeenCalled();
+  });
+
+  it('restores the original viewport when asked', async () => {
+    const { expandViewportToPage } = await import(
+      '../../server/lib/visuals/captureFormVisuals.js'
+    );
+    const page = resizablePage({ viewport: { width: 1280, height: 720 }, pageHeight: 3000 });
+
+    const restore = await expandViewportToPage(page, {
+      limits: { maxCaptureHeight: 8000, reflowSettleMs: 0 },
+      logger: silentLog
+    });
+    await restore();
+
+    expect(page.setViewport).toHaveBeenLastCalledWith({ width: 1280, height: 720 });
+  });
+
+  it('survives a restore on a page that is already gone', async () => {
+    const { expandViewportToPage } = await import(
+      '../../server/lib/visuals/captureFormVisuals.js'
+    );
+    const page = resizablePage({ viewport: { width: 1280, height: 720 }, pageHeight: 3000 });
+    const restore = await expandViewportToPage(page, {
+      limits: { maxCaptureHeight: 8000, reflowSettleMs: 0 },
+      logger: silentLog
+    });
+
+    page.setViewport.mockRejectedValueOnce(new Error('Target closed'));
+
+    // Restoring is tidiness, not a requirement: it must not fail the scan.
+    await expect(restore()).resolves.toBeUndefined();
+  });
+
+  it('does nothing on a page that cannot report a viewport', async () => {
+    const { expandViewportToPage } = await import(
+      '../../server/lib/visuals/captureFormVisuals.js'
+    );
+    const page = { evaluate: vi.fn(), setViewport: vi.fn() };
+
+    const restore = await expandViewportToPage(page, { logger: silentLog });
+    await restore();
+
+    expect(page.setViewport).not.toHaveBeenCalled();
+    expect(page.evaluate).not.toHaveBeenCalled();
   });
 });

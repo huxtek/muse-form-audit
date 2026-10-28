@@ -16,6 +16,8 @@
  * than trusting the index blindly.
  */
 
+import { cropPng } from './cropImage.js';
+
 /** Controls worth outlining. */
 const FIELD_SELECTOR = 'input, select, textarea, button';
 
@@ -36,7 +38,15 @@ export const VISUAL_LIMITS = {
    * roughly a tenth the size of the equivalent PNG. Form crops stay lossless.
    */
   pageMapQuality: Number(process.env.VISUAL_PAGE_MAP_QUALITY || 70),
-  maxPageMapHeight: Number(process.env.VISUAL_MAX_PAGE_MAP_HEIGHT || 8000)
+  maxPageMapHeight: Number(process.env.VISUAL_MAX_PAGE_MAP_HEIGHT || 8000),
+  /**
+   * How tall the viewport may grow to bring a whole page into one frame.
+   * Every pixel costs memory in the capture, so a very long page is
+   * photographed from the top down and marked truncated.
+   */
+  maxCaptureHeight: Number(process.env.VISUAL_MAX_CAPTURE_HEIGHT || 8000),
+  /** Time for a responsive page to settle after the viewport grows. */
+  reflowSettleMs: Number(process.env.VISUAL_REFLOW_SETTLE_MS || 600)
 };
 
 /**
@@ -249,6 +259,63 @@ export function resolvePadding(formRect, pageSize, requested) {
 }
 
 /**
+ * Grows the viewport until it covers the whole page, and returns a function
+ * that puts it back.
+ *
+ * Everything else here depends on this. Chrome will not give us a correct
+ * partial screenshot: asking for a `clip`, or for `fullPage`, routes the
+ * capture through a path that drops separately composited layers, so a form
+ * sitting on a panel over a coloured hero comes back as a flat wash with
+ * ghost text on it. Only a plain, unclipped viewport screenshot paints
+ * correctly.
+ *
+ * That leaves the problem of content below the fold. Scrolling to it is not
+ * dependable -- plenty of pages do not scroll the document at all, and on
+ * those `window.scrollTo` is silently a no-op, so the lower part of a tall
+ * form is simply unreachable. Making the viewport as tall as the page needs
+ * no scrolling and keeps every form in one frame.
+ *
+ * Geometry MUST be read after this call: a vertical resize reflows a
+ * responsive page, and coordinates measured at the old height would describe
+ * somewhere the form no longer is.
+ */
+export async function expandViewportToPage(page, { limits = VISUAL_LIMITS, logger = console } = {}) {
+  const original = page.viewport?.() ?? null;
+
+  if (!original) {
+    return async () => {};
+  }
+
+  const pageHeight = await page.evaluate(() =>
+    Math.max(document.documentElement.scrollHeight, window.innerHeight)
+  );
+
+  const target = Math.min(pageHeight, limits.maxCaptureHeight);
+
+  if (target <= original.height) {
+    return async () => {};
+  }
+
+  await page.setViewport({ ...original, height: target });
+  // Let the reflow settle before anything measures or photographs it.
+  await new Promise((resolve) => setTimeout(resolve, limits.reflowSettleMs));
+
+  if (pageHeight > target) {
+    logger.log?.(
+      `   📐 [VISUALS] Page is ${pageHeight}px; capturing the top ${target}px`
+    );
+  }
+
+  return async () => {
+    try {
+      await page.setViewport(original);
+    } catch {
+      // The page may already be closing; restoring is a courtesy, not a need.
+    }
+  };
+}
+
+/**
  * Captures geometry plus a cropped PNG per form.
  *
  * Returns one entry per form, always: a form that could not be photographed
@@ -272,6 +339,19 @@ export async function captureFormVisuals(
   }
 
   const visuals = [];
+
+  // One unclipped screenshot for the whole page, cut up per form below. This
+  // is the only capture Chrome paints correctly, and taking it once is also
+  // cheaper than one request per form.
+  let pageImage = null;
+
+  if (geometry.forms.some((form) => form.visible)) {
+    try {
+      pageImage = await page.screenshot({ type: 'png' });
+    } catch (error) {
+      logger.warn?.(`⚠️  [VISUALS] Page capture failed: ${error.message}`);
+    }
+  }
 
   for (const form of geometry.forms) {
     const base = {
@@ -316,17 +396,20 @@ export async function captureFormVisuals(
     const height = Math.min(desiredHeight, limits.maxFormHeight);
     const truncated = width < desiredWidth || height < desiredHeight;
 
+    if (!pageImage) {
+      visuals.push({ ...base, screenshot: null, unavailableReason: 'the page could not be captured' });
+      continue;
+    }
+
     try {
-      const buffer = await page.screenshot({
-        type: 'png',
-        clip: {
-          x: Math.max(0, form.rect.x - padLeft),
-          y: Math.max(0, form.rect.y - padTop),
-          width,
-          height
-        },
-        captureBeyondViewport: true
+      const capture = cropPng(pageImage, {
+        x: Math.max(0, form.rect.x - padLeft),
+        y: Math.max(0, form.rect.y - padTop),
+        width,
+        height
       });
+
+      const buffer = capture.buffer;
 
       visuals.push({
         ...base,
@@ -341,11 +424,13 @@ export async function captureFormVisuals(
           }
         })),
         padding: { left: padLeft, top: padTop, right: padRight, bottom: padBottom },
-        // The capture is what the client scales against, which may be the
-        // clamped size rather than the padded size.
-        width,
-        height,
-        truncated,
+        // The capture is what the client scales against. Report what the
+        // image actually is: a region at the page edge comes back short, and
+        // highlights scaled against a size the image does not have land in
+        // the wrong place.
+        width: capture.width,
+        height: capture.height,
+        truncated: truncated || capture.width < width || capture.height < height,
         screenshot: Buffer.from(buffer),
         contentType: 'image/png',
         byteLength: buffer.length
@@ -377,29 +462,25 @@ export async function captureFormVisuals(
  */
 export async function capturePageMap(page, { limits = VISUAL_LIMITS, pageSize, logger = console } = {}) {
   const height = pageSize?.height ?? 0;
-  const capped = height > limits.maxPageMapHeight;
+  const viewportHeight = page.viewport?.()?.height ?? height;
+  // The map shows whatever the grown viewport could reach.
+  const captured = Math.min(height || viewportHeight, viewportHeight);
+  const capped = height > captured;
 
   try {
+    // Unclipped, like the form crops, and for the same reason: a clipped or
+    // fullPage capture loses separately composited layers and the map comes
+    // back washed out. The viewport has been grown to cover the page, so a
+    // plain screenshot already is the page -- and taller pages are cut off by
+    // that cap rather than by a clip here.
     const buffer = await page.screenshot({
       type: 'jpeg',
-      quality: limits.pageMapQuality,
-      ...(capped
-        ? {
-            clip: {
-              x: 0,
-              y: 0,
-              width: pageSize.width,
-              height: limits.maxPageMapHeight
-            },
-            captureBeyondViewport: true
-          }
-        : { fullPage: true })
+      quality: limits.pageMapQuality
     });
 
     logger.log?.(
-      `🗺  [VISUALS] Page map captured ${pageSize?.width ?? '?'}x${
-        capped ? limits.maxPageMapHeight : height || '?'
-      } (${Math.round(buffer.length / 1024)} kB jpeg)`
+      `🗺  [VISUALS] Page map captured ${pageSize?.width ?? '?'}x${captured || '?'}` +
+        ` (${Math.round(buffer.length / 1024)} kB jpeg)`
     );
 
     return {
@@ -407,7 +488,7 @@ export async function capturePageMap(page, { limits = VISUAL_LIMITS, pageSize, l
       contentType: 'image/jpeg',
       byteLength: buffer.length,
       width: pageSize?.width ?? 0,
-      height: capped ? limits.maxPageMapHeight : height,
+      height: captured,
       truncated: capped
     };
   } catch (error) {

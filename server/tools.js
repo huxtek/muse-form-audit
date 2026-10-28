@@ -4,6 +4,7 @@ import xml2js from 'xml2js';
 import {
   captureFormVisuals,
   capturePageMap,
+  expandViewportToPage,
   readFormGeometry
 } from './lib/visuals/captureFormVisuals.js';
 
@@ -420,10 +421,20 @@ export class CrawlerTools {
         let formVisuals = [];
         let pageMap = null;
         try {
-          const geometry = await readFormGeometry(page);
-          formVisuals = await captureFormVisuals(page, { geometry });
-          if (geometry.forms.length > 0) {
-            pageMap = await capturePageMap(page, { pageSize: geometry.pageSize });
+          // Grow the viewport to cover the page FIRST. Chrome only paints a
+          // screenshot correctly when it is unclipped, so every capture below
+          // is a plain viewport shot -- which means the viewport has to be
+          // the page. Geometry is read afterwards because the resize reflows
+          // a responsive layout.
+          const restoreViewport = await expandViewportToPage(page);
+          try {
+            const geometry = await readFormGeometry(page);
+            formVisuals = await captureFormVisuals(page, { geometry });
+            if (geometry.forms.length > 0) {
+              pageMap = await capturePageMap(page, { pageSize: geometry.pageSize });
+            }
+          } finally {
+            await restoreViewport();
           }
         } catch (visualError) {
           // A visual failure must never fail the scan; the written findings
