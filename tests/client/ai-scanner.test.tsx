@@ -19,12 +19,14 @@ import { formAPI } from '@/services/api';
 vi.mock('@/services/api', () => ({
   formAPI: {
     startScan: vi.fn(),
+    startDemo: vi.fn(),
     getReport: vi.fn(),
     analyzeForm: vi.fn()
   }
 }));
 
 const startScanMock = vi.mocked(formAPI.startScan);
+const startDemoMock = vi.mocked(formAPI.startDemo);
 const getReportMock = vi.mocked(formAPI.getReport);
 
 const POLL_INTERVAL_MS = 2000;
@@ -432,53 +434,80 @@ describe('AIScanner sample report', () => {
       </DevModeProvider>
     );
 
-  const sampleButton = () => screen.getByRole('button', { name: /sample report/i });
+  const entryPoints = () => screen.getAllByRole('button', { name: /sample report/i });
 
-  it('runs without a URL, which is the whole point', async () => {
-    // Understanding the tool used to cost a URL and, for a real scan, API
-    // keys -- so a visitor had to commit before seeing what an audit is.
-    startScanMock.mockResolvedValue({ jobId: 'job-1' });
+  it('offers two ways in, so it is not missed', () => {
+    // A link buried under the options was the least noticeable thing on the
+    // page. The example panel is now the way in, with a text link as backup
+    // for anyone reading left to right who never reaches it.
+    renderScanner();
+
+    expect(entryPoints().length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('asks the demo endpoint, not a scan of a made-up URL', async () => {
+    startDemoMock.mockResolvedValue({ jobId: 'job-1', url: 'https://skyline-air.example/' });
     renderScanner();
 
     await act(async () => {
-      fireEvent.click(sampleButton());
+      fireEvent.click(entryPoints()[0]);
     });
 
-    expect(startScanMock).toHaveBeenCalledWith(
-      expect.objectContaining({ url: 'https://example.com', devMode: true })
+    expect(startDemoMock).toHaveBeenCalled();
+    // No target to resolve, nothing re-pointed at a real company, and the
+    // scan rate limit is left for actual scans.
+    expect(startScanMock).not.toHaveBeenCalled();
+  });
+
+  it('needs no URL at all', async () => {
+    startDemoMock.mockResolvedValue({ jobId: 'job-1' });
+    renderScanner();
+
+    const field = screen.getByLabelText('Website URL for AI form analysis');
+    expect(field).toHaveValue('');
+
+    await act(async () => {
+      fireEvent.click(entryPoints()[0]);
+    });
+
+    expect(startDemoMock).toHaveBeenCalled();
+  });
+
+  it('marks the run as sample data, not merely as dev mode', async () => {
+    startDemoMock.mockResolvedValue({ jobId: 'job-1', url: 'https://skyline-air.example/' });
+    getReportMock.mockResolvedValue(
+      jobRecord({ status: 'running', devMode: true, isSampleData: true })
     );
-  });
-
-  it('asks for mock data explicitly rather than flipping the header toggle', async () => {
-    // Forcing devMode in the request keeps the visitor in the mode they
-    // arrived in, and works on a deployed build where Dev Mode is off.
-    startScanMock.mockResolvedValue({ jobId: 'job-1' });
     renderScanner();
 
     await act(async () => {
-      fireEvent.click(sampleButton());
+      fireEvent.click(entryPoints()[0]);
     });
 
-    expect(startScanMock.mock.calls[0][0].devMode).toBe(true);
+    // Fabricated scores need saying so wherever they are shown, and the
+    // cards' own banners scroll away while the findings stay on screen.
+    expect(screen.getByText(/Sample data\./i)).toBeInTheDocument();
+    expect(screen.getByText(/not a real audit/i)).toBeInTheDocument();
   });
 
-  it('never submits the form', async () => {
+  it('never submits the form from either entry point', () => {
     renderScanner();
 
     // A submit-type button here would run a real scan on whatever was typed.
-    expect(sampleButton()).toHaveAttribute('type', 'button');
+    for (const button of entryPoints()) {
+      expect(button).toHaveAttribute('type', 'button');
+    }
   });
 
-  it('shows the sample URL in the field, so the result is not unexplained', async () => {
-    startScanMock.mockResolvedValue({ jobId: 'job-1' });
+  it('offers the sample when someone submits with no URL', async () => {
     renderScanner();
 
     await act(async () => {
-      fireEvent.click(sampleButton());
+      fireEvent.submit(screen.getByLabelText('Website URL for AI form analysis').closest('form'));
     });
 
-    expect(screen.getByLabelText('Website URL for AI form analysis')).toHaveValue(
-      'https://example.com'
-    );
+    // The moment someone is most likely to want it is the moment they have
+    // nothing to type.
+    expect(screen.getByRole('alert')).toHaveTextContent(/sample report/i);
   });
 });

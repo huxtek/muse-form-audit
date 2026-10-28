@@ -497,7 +497,7 @@
               "issues": []
             },
             "identification": {
-              "score": 18,
+              "score": 14,
               "maxScore": 20,
               "issues": []
             },
@@ -507,14 +507,14 @@
               "issues": []
             },
             "inputHints": {
-              "score": 7,
+              "score": 6,
               "maxScore": 10,
               "issues": [
                 "No inputmode on the name field"
               ]
             },
             "dataTypes": {
-              "score": 12,
+              "score": 10,
               "maxScore": 15,
               "issues": [
                 "Select has no machine-readable values"

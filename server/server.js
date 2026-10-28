@@ -186,8 +186,18 @@ function broadcastUpdate(jobId, update) {
 // MOCK SCAN
 // =============================================================================
 
-/** Deep-clone a fixture and re-point every URL it carries at the submitted site. */
-function buildMockResponse(fixture, jobId, validatedURL, fullCrawl) {
+/**
+ * Deep-clone a fixture and re-point every URL it carries at the submitted
+ * site.
+ *
+ * Pass `keepFixtureHost` to skip the re-pointing, which is what the demo
+ * does. Wearing the visitor's own hostname is what makes a fabricated report
+ * dangerous: every URL and every sentence would name a real company
+ * alongside invented scores, and a screenshot of that is indistinguishable
+ * from a genuine audit. The demo keeps the fixture's reserved .example host,
+ * which cannot belong to anyone.
+ */
+function buildMockResponse(fixture, jobId, validatedURL, fullCrawl, { keepFixtureHost = false } = {}) {
   const now = new Date().toISOString();
   // Read before the spread below overwrites `url` with the submitted target.
   const fixtureHostname = getFixtureHostname(fixture);
@@ -195,12 +205,25 @@ function buildMockResponse(fixture, jobId, validatedURL, fullCrawl) {
     ...structuredClone(fixture),
     id: jobId,
     jobId,
-    url: validatedURL,
+    url: keepFixtureHost ? fixture.url : validatedURL,
     fullCrawl,
     devMode: true,
     createdAt: now,
     timestamp: now
   };
+
+  if (keepFixtureHost) {
+    // The payload itself says it is sample data, not only the job envelope.
+    // Anything handling the results programmatically -- the PDF, an export,
+    // a screenshot pipeline -- can see it without consulting the job.
+    if (mockResponse.results) {
+      mockResponse.results.isSampleData = true;
+    }
+
+    attachSampleVisuals(mockResponse, jobId);
+
+    return mockResponse;
+  }
 
   const toSubmittedOrigin = (value) =>
     typeof value === 'string' ? rewriteOrigin(value, validatedURL) : value;
@@ -423,6 +446,58 @@ export const toRequestBoolean = (value) => {
 
   return Boolean(value);
 };
+
+/**
+ * The bundled sample report, with no URL involved.
+ *
+ * Deliberately not /api/scan with a fake URL. There is no target to
+ * validate, so a reserved .example host cannot fail DNS resolution; nothing
+ * is re-pointed at a real company; and it does not spend the scan limiter,
+ * so a visitor clicking "see a sample" twice is not met with a 429 on a
+ * request that never touched a browser or a model.
+ */
+app.post('/api/demo', async (req, res) => {
+  const fullCrawl = toRequestBoolean(req.body?.fullCrawl);
+  const jobId = uuidv4();
+  const fixture = fullCrawl ? mockFullCrawlResponse : mockSinglePageResponse;
+  const providerName = resolveProviderName();
+  const provider = createLlmProvider(providerName);
+
+  const mockResponse = buildMockResponse(fixture, jobId, null, fullCrawl, {
+    keepFixtureHost: true
+  });
+
+  const job = {
+    ...mockResponse,
+    modelProvider: providerName,
+    modelLabel: provider.label,
+    model: provider.model,
+    isSampleData: true,
+    status: 'running',
+    progress: 0,
+    currentStep: 'Starting scan...',
+    results: null,
+    formData: null,
+    formsFound: 0,
+    formsAnalyzed: 0
+  };
+
+  jobs.set(jobId, job);
+  runMockTimeline(jobId, buildMockTimeline(mockResponse, fullCrawl));
+
+  res.json({
+    success: true,
+    jobId,
+    message: 'Sample report',
+    websocket_url: `ws://${HOST}:${PORT}`,
+    devMode: true,
+    isSampleData: true,
+    url: mockResponse.url,
+    modelProvider: providerName,
+    modelLabel: provider.label,
+    model: provider.model
+  });
+});
 
 app.post('/api/scan', scanLimiter, validateURLMiddleware, async (req, res) => {
   try {

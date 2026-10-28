@@ -51,6 +51,30 @@ export const formAPI = {
     return response.json();
   },
 
+  /**
+   * Runs the bundled sample report. No URL is involved.
+   *
+   * A separate endpoint rather than a scan of a made-up address: there is no
+   * target to resolve, nothing is re-pointed at a real company, and it does
+   * not spend the scan rate limit on a request that never touches a browser
+   * or a model.
+   */
+  startDemo: async (options?: { fullCrawl?: boolean }) => {
+    const response = await fetch(`${API_BASE_URL}/demo`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ fullCrawl: options?.fullCrawl ?? false })
+    });
+
+    if (!response.ok) {
+      await throwResponseError(response, 'Sample report failed');
+    }
+
+    return response.json();
+  },
+
   /** Polls a scan job. Returns the job record including `status` and `results`. */
   getReport: async (jobId: string) => {
     const response = await fetch(`${API_BASE_URL}/report/${jobId}`);

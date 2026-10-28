@@ -29,9 +29,20 @@ vi.mock('jspdf', () => {
     setFont() {}
     setTextColor() {}
     setDrawColor() {}
+    setFillColor() {}
+    rect() {}
     line() {}
     setPage() {}
     save() {}
+
+    // The sample-data notice is boxed, so it needs the page width. A line of
+    // plain body copy is the first thing skimmed past in a forwarded PDF.
+    internal = {
+      pageSize: {
+        getWidth: () => 210,
+        getHeight: () => 297
+      }
+    };
 
     addPage() {
       this.pages += 1;
@@ -131,7 +142,7 @@ describe('PDFGenerator mock-data labelling', () => {
   it('marks the report when isMockData is true', () => {
     new PDFGenerator().generateReport(reportWith({ isMockData: true }), 'job-mock');
 
-    expect(renderedText()).toContain('MOCK DATA - sample report, not a real audit');
+    expect(renderedText()).toContain('SAMPLE DATA - describes a fictional site, not a real audit');
   });
 
   it('omits the marker for a real scan', () => {

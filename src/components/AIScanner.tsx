@@ -43,11 +43,14 @@ const RESULT_TABS = {
 const STACKED_FORM_LIMIT = 3;
 
 /**
- * Target for the sample report. The fixtures rewrite their own host to
- * whatever is submitted, and example.com is reserved for exactly this, so
- * nothing in the sample output points at a real site.
+ * The site the sample report describes.
+ *
+ * A reserved .example host, so it cannot belong to anyone. The server keeps
+ * it rather than re-pointing the fixture at a URL the visitor typed, which
+ * is what would make a fabricated report dangerous: every URL and sentence
+ * would name a real company beside invented scores.
  */
-const SAMPLE_REPORT_URL = 'https://example.com';
+const SAMPLE_REPORT_URL = 'https://skyline-air.example/';
 
 interface ScanJob {
   id: string;
@@ -58,6 +61,12 @@ interface ScanJob {
   results?: ScanResults;
   error?: string;
   createdAt: string;
+  /**
+   * Bundled sample output rather than an audit of a real site. Distinct from
+   * `devMode`, which also covers a developer running a keyless scan against
+   * a URL they chose.
+   */
+  isSampleData?: boolean;
   // Per-form analysis fields
   formsFound?: number;
   formsAnalyzed?: number;
@@ -105,6 +114,13 @@ export const AIScanner = () => {
   const formDetailRef = useRef<HTMLDivElement | null>(null);
   /** Validation message for the URL field, shown beside it and announced. */
   const [urlError, setUrlError] = useState<string | null>(null);
+
+  /**
+   * True for anything fabricated: the one-click sample report, and a keyless
+   * dev-mode scan of a URL someone chose. Both produce numbers that describe
+   * no real site, so both need saying so.
+   */
+  const isSampleRun = currentJob?.isSampleData === true || currentJob?.devMode === true;
   const [perFormProgress, setPerFormProgress] = useState<PerFormProgress>({
     formsFound: 0,
     formsAnalyzed: 0
@@ -243,10 +259,38 @@ export const AIScanner = () => {
    * Passes devMode explicitly rather than flipping the header toggle: the
    * visitor should not be left in a different mode than they arrived in.
    */
-  const showSampleReport = () => {
-    setUrl(SAMPLE_REPORT_URL);
+  const showSampleReport = async () => {
     setUrlError(null);
-    startAIScan({ url: SAMPLE_REPORT_URL, devMode: true });
+
+    try {
+      const started = await formAPI.startDemo();
+
+      if (started?.jobId) {
+        setCurrentJob({
+          id: started.jobId,
+          url: started.url ?? SAMPLE_REPORT_URL,
+          status: 'queued',
+          progress: 0,
+          currentStep: 'Starting sample report...',
+          createdAt: new Date().toISOString(),
+          devMode: true,
+          isSampleData: true,
+          modelProvider: started.modelProvider,
+          modelLabel: started.modelLabel,
+          model: started.model
+        });
+
+        // Same path a real scan takes: the socket is opened by the effect
+        // watching currentJob, and polling backs it up.
+        pollJobStatus(started.jobId);
+      }
+    } catch (error) {
+      toast({
+        title: 'Sample report unavailable',
+        description: error instanceof Error ? error.message : 'Could not load the sample report',
+        variant: 'destructive'
+      });
+    }
   };
 
   const startAIScan = async (overrides?: { url?: string; devMode?: boolean }) => {
@@ -255,11 +299,13 @@ export const AIScanner = () => {
 
     if (!url) {
       // Also written beside the field: a toast is gone before an agent, or a
-      // screen reader user who looked away, can read it.
-      setUrlError('Enter a website URL to start the scan.');
+      // screen reader user who looked away, can read it. And this is the
+      // moment someone is most likely to want the sample, so offer it rather
+      // than only refusing.
+      setUrlError('Enter a website URL to scan, or try the sample report below.');
       toast({
         title: "Please enter a URL",
-        description: "Enter a website URL to start the AI-driven scan",
+        description: "Enter a website URL, or see the sample report if you do not have one to hand",
         variant: "destructive",
       });
       return;
@@ -388,7 +434,25 @@ export const AIScanner = () => {
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 p-4 rounded-lg border border-border/40 bg-muted/20">
         {averageScore !== null && (
           <div>
-            <div className="text-2xl font-bold text-foreground leading-none">{averageScore}%</div>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-bold text-foreground leading-none">
+                {averageScore}%
+              </span>
+
+              {/* Marked here specifically. The surrounding cards carry a
+                  banner, but this strip is the part that gets screenshotted
+                  on its own, and a score with no provenance beside it is
+                  indistinguishable from a real result. */}
+              {isSampleRun && (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] uppercase tracking-wide border-amber-500/60 text-amber-400"
+                >
+                  Sample
+                </Badge>
+              )}
+            </div>
+
             <div className="text-xs text-muted-foreground mt-1">
               {forms.length > 1 ? 'Average AI compatibility' : 'AI compatibility'}
             </div>
@@ -611,6 +675,23 @@ export const AIScanner = () => {
     <>
       <div>
         <div>
+
+          {/* Sticks below the header for as long as fabricated results are on
+              screen. The cards carry their own banners, but those scroll away
+              and the findings underneath look exactly like a real audit once
+              they do. */}
+          {isSampleRun && (
+            <div
+              role="status"
+              className="sticky top-16 z-40 -mx-4 mb-6 flex items-center justify-center gap-2 border-y border-amber-500/40 bg-amber-950/80 px-4 py-2 text-sm text-amber-200 backdrop-blur"
+            >
+              <FlaskConical className="h-4 w-4 shrink-0" />
+              <span>
+                <strong className="font-semibold">Sample data.</strong> These scores describe a
+                fictional site, not a real audit.
+              </span>
+            </div>
+          )}
 
           {/* The message, the action and the outcome in one grid, so "what is
               this", "what do I do" and "what do I get" are answered together.
@@ -888,15 +969,15 @@ export const AIScanner = () => {
                     </div>
                   </details>
 
-                  {/* The comprehension shortcut: understanding this tool
-                      used to cost a URL and, for a real scan, API keys.
+                  {/* Second route to the same thing, for anyone reading left
+                      to right who never reaches the panel on the right.
                       type="button" so it never submits the form. */}
                   <button
                     type="button"
                     onClick={showSampleReport}
                     className="text-sm font-medium text-sky-400 hover:text-sky-300 underline-offset-4 hover:underline"
                   >
-                    Or see a sample report &mdash; no URL needed
+                    No site to hand? See a sample report instead
                   </button>
 
                   {/* Dev Mode lives in the header, outside this form, so a
@@ -923,6 +1004,20 @@ export const AIScanner = () => {
                   Every problem marked on a screenshot of your own form, with the fix
                   written out field by field.
                 </p>
+
+                {/* The panel already does the work of explaining the product,
+                    so it should be the way in. A link buried under the options
+                    was the least likely thing on the page to be noticed. */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={showSampleReport}
+                  className="mt-4 w-full"
+                >
+                  <Eye className="h-4 w-4 mr-2" />
+                  See a full sample report
+                </Button>
               </div>
             </div>
           )}

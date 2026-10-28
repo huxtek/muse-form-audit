@@ -57,15 +57,30 @@ export class PDFGenerator {
     this.doc.text(this.cleanText('AI FORM AUDIT REPORT'), this.margin, this.currentY);
     this.currentY += 10;
 
-    // Mock marker, directly under the title so it cannot be missed.
+    // Mock marker, directly under the title so it cannot be missed. Boxed
+    // and coloured rather than set as plain text: a PDF gets forwarded,
+    // printed and cropped, and a line of black body copy is the first thing
+    // to be skimmed past -- leaving a document that reads as a real audit of
+    // whatever site it names.
     if (data.isMockData) {
-      this.doc.setFontSize(12);
+      const width = this.doc.internal.pageSize.getWidth() - this.margin * 2;
+
+      this.doc.setFillColor(254, 243, 199);
+      this.doc.setDrawColor(245, 158, 11);
+      this.doc.rect(this.margin, this.currentY - 5, width, 11, 'FD');
+
+      this.doc.setFontSize(11);
+      this.doc.setFont('helvetica', 'bold');
+      this.doc.setTextColor(146, 64, 14);
       this.doc.text(
-        this.cleanText('MOCK DATA - sample report, not a real audit'),
-        this.margin,
-        this.currentY
+        this.cleanText('SAMPLE DATA - describes a fictional site, not a real audit'),
+        this.margin + 3,
+        this.currentY + 2
       );
-      this.currentY += 8;
+
+      this.doc.setTextColor(0);
+      this.doc.setFont('helvetica', 'normal');
+      this.currentY += 14;
     }
 
     this.currentY += 5;
