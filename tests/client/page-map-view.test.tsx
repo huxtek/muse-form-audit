@@ -288,7 +288,7 @@ describe('PageMapView expanded view', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
-  it('selects in place without closing, so a click is never jarring', () => {
+  it('closes and reveals the form when a region is chosen', () => {
     const onSelect = vi.fn();
     render(
       <PageMapView forms={twoForms()} jobId="job-1" selectedIndex={0} onSelect={onSelect} />
@@ -300,8 +300,11 @@ describe('PageMapView expanded view', () => {
     const inDialog = regions().slice(-2);
     fireEvent.click(inDialog[1]);
 
-    expect(onSelect).toHaveBeenCalledWith(1, { reveal: false });
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    // Selecting in place and leaving the dialog up was tried first, and it
+    // put the click's payoff behind the dialog -- which is the very "nothing
+    // happened" feeling this view exists to fix.
+    expect(onSelect).toHaveBeenCalledWith(1, { reveal: true });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('leaves via an explicit action that reveals the findings', () => {
@@ -316,7 +319,7 @@ describe('PageMapView expanded view', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('honours a selection made in the dialog when it is dismissed instead', () => {
+  it('changes nothing when dismissed without choosing a region', () => {
     const onSelect = vi.fn();
     render(
       <PageMapView forms={twoForms()} jobId="job-1" selectedIndex={0} onSelect={onSelect} />
@@ -324,13 +327,33 @@ describe('PageMapView expanded view', () => {
     expand();
     loadAllMaps();
 
-    fireEvent.click(regions().slice(-2)[1]);
-    onSelect.mockClear();
-
     fireEvent.keyDown(document, { key: 'Escape' });
 
-    // The click must not be forgotten just because the dialog was dismissed
-    // rather than confirmed.
-    expect(onSelect).toHaveBeenCalledWith(1, { reveal: true });
+    // Looking closer and backing out is not a selection.
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('never scrolls the page from inside the map, only the map box', () => {
+    // scrollIntoView moves every scrollable ancestor, which scrolled the page
+    // around behind the expanded dialog: the user could see movement but not
+    // what had moved.
+    const forms = twoForms();
+    const scrollIntoView = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    try {
+      const { rerender } = render(
+        <PageMapView forms={forms} jobId="job-1" selectedIndex={0} onSelect={() => {}} />
+      );
+      loadAllMaps();
+      rerender(
+        <PageMapView forms={forms} jobId="job-1" selectedIndex={1} onSelect={() => {}} />
+      );
+
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
   });
 });

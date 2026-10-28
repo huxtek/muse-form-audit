@@ -35,12 +35,6 @@ export const PageMapView = ({ forms, jobId, selectedIndex, onSelect }: PageMapVi
   const [imageState, setImageState] = useState<"loading" | "ready" | "error">("loading");
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const [expandedOpen, setExpandedOpen] = useState(false);
-  /**
-   * Selection made inside the expanded view. Applied to the page immediately
-   * so the click is visibly answered, while the dialog stays open -- closing
-   * it out from under the user on every click is abrupt.
-   */
-  const [pendingIndex, setPendingIndex] = useState<number | null>(null);
   const lastKey = useRef<string>("");
   const scrollBox = useRef<HTMLDivElement | null>(null);
   const selectedRegion = useRef<HTMLButtonElement | null>(null);
@@ -61,17 +55,36 @@ export const PageMapView = ({ forms, jobId, selectedIndex, onSelect }: PageMapVi
   // Keep the chosen form visible in the scroll box. Selection also arrives
   // from the numeric picker, so without this the map can silently be showing
   // a different part of the page than the panel below describes.
+  //
+  // Scrolls the box by setting scrollTop rather than calling scrollIntoView
+  // on the region: scrollIntoView moves EVERY scrollable ancestor, including
+  // the document, so it dragged the page sideways under the picker and --
+  // worse -- scrolled the page around behind the expanded map, where the
+  // user could see it move but not see what had moved.
   useEffect(() => {
-    if (imageState !== "ready" || !selectedRegion.current || !scrollBox.current) {
+    const box = scrollBox.current;
+    const region = selectedRegion.current;
+
+    if (imageState !== "ready" || !box || !region) {
       return;
     }
 
-    const box = scrollBox.current.getBoundingClientRect();
-    const region = selectedRegion.current.getBoundingClientRect();
+    const boxRect = box.getBoundingClientRect();
+    const regionRect = region.getBoundingClientRect();
+    const alreadyVisible = regionRect.top >= boxRect.top && regionRect.bottom <= boxRect.bottom;
 
-    if (region.top < box.top || region.bottom > box.bottom) {
-      selectedRegion.current.scrollIntoView({ behavior: scrollBehavior(), block: "center" });
+    if (alreadyVisible) {
+      return;
     }
+
+    const offsetInContent = regionRect.top - boxRect.top + box.scrollTop;
+    const centred = offsetInContent - (box.clientHeight - regionRect.height) / 2;
+    const furthest = box.scrollHeight - box.clientHeight;
+
+    box.scrollTo({
+      top: Math.min(Math.max(centred, 0), Math.max(furthest, 0)),
+      behavior: scrollBehavior()
+    });
   }, [selectedIndex, imageState]);
 
   if (!pageMap) {
@@ -120,12 +133,12 @@ export const PageMapView = ({ forms, jobId, selectedIndex, onSelect }: PageMapVi
         </div>
       )}
 
-      <Dialog open={expandedOpen} onOpenChange={handleExpandedChange}>
+      <Dialog open={expandedOpen} onOpenChange={setExpandedOpen}>
         <DialogContent className="w-[95vw] max-w-[1800px] max-h-[92vh] flex flex-col gap-4">
           <DialogHeader>
             <DialogTitle>Scanned page</DialogTitle>
             <DialogDescription>
-              Click a form to select it. Your findings stay below the map on the page.
+              Click a form to close this view and jump to its findings.
             </DialogDescription>
           </DialogHeader>
 
@@ -136,6 +149,8 @@ export const PageMapView = ({ forms, jobId, selectedIndex, onSelect }: PageMapVi
               Form {selectedIndex + 1} selected
             </span>
 
+            {/* For someone who expanded the map to look, changed nothing, and
+                wants to get back to the form they already had open. */}
             <Button size="sm" onClick={handleViewFindings}>
               View findings
             </Button>
@@ -238,39 +253,30 @@ export const PageMapView = ({ forms, jobId, selectedIndex, onSelect }: PageMapVi
   }
 
   /**
-   * A region was chosen. Inline, that should take the user to the findings.
-   * Expanded, it selects in place and waits: the dialog closing itself on
-   * every click is jarring, so leaving is an explicit action.
+   * A region was chosen: show that form, from either map.
+   *
+   * The expanded view closes on the way. Selecting in place and leaving the
+   * dialog up was tried first and it recreated the problem this whole view
+   * exists to fix -- the click's payoff landed behind the dialog, so clicking
+   * a form felt like nothing had happened. Clicking a labelled region is a
+   * deliberate "show me this one", and nothing is lost by honouring it: the
+   * inline map sits directly above the detail with the same regions on it,
+   * and Expand page is one click away.
    */
   function handleSelect(index: number, expanded: boolean) {
     if (expanded) {
-      setPendingIndex(index);
-      onSelect(index, { reveal: false });
-
-      return;
+      setExpandedOpen(false);
     }
 
     onSelect(index, { reveal: true });
   }
 
   function handleOpenExpanded() {
-    setPendingIndex(null);
     setExpandedOpen(true);
   }
 
-  function handleExpandedChange(open: boolean) {
-    setExpandedOpen(open);
-
-    // Dismissed without using the button: honour the selection that was made
-    // in there, and take the user to it.
-    if (!open && pendingIndex !== null) {
-      setPendingIndex(null);
-      onSelect(pendingIndex, { reveal: true });
-    }
-  }
-
+  /** Leaving with whatever is already selected, without picking a region. */
   function handleViewFindings() {
-    setPendingIndex(null);
     setExpandedOpen(false);
     onSelect(selectedIndex, { reveal: true });
   }
