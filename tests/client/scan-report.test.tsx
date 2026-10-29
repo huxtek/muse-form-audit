@@ -161,14 +161,14 @@ describe('report score strip', () => {
     });
 
     expect(screen.getByText(/^2 /)).toBeInTheDocument();
-    expect(screen.queryByText(/No field-level issues/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No issues found/)).not.toBeInTheDocument();
   });
 
   it('says so plainly when there is nothing to report', async () => {
     await renderReport();
 
     // A row of three zeroes reads as a broken count rather than a clean bill.
-    expect(screen.getByText(/No field-level issues/)).toBeInTheDocument();
+    expect(screen.getByText(/No issues found/)).toBeInTheDocument();
   });
 });
 
@@ -584,5 +584,91 @@ describe('report header pinning', () => {
 
     expect(strip).not.toHaveClass('sticky');
     expect(stickyBar()).toHaveClass('sticky');
+  });
+});
+
+/**
+ * The score strip and the findings list must agree.
+ *
+ * They did not. The strip ran its own inline reduce over `fieldIssues` only,
+ * while the list collected `fieldIssues` plus `formFindings`, so the live
+ * sample showed "5 high, 4 medium, 7 low" at the top of the report and
+ * "20 findings" under Details -- the four whole-form findings counted in one
+ * place and not the other. Both now go through `collectFindings`.
+ */
+describe('report finding totals agree', () => {
+  const mixedForms = [
+    form({
+      accessibility: {
+        score: 57,
+        fieldIssues: [
+          { field: 'a', severity: 'high', issue: 'field high' },
+          { field: 'b', severity: 'low', issue: 'field low' }
+        ],
+        formFindings: [
+          { severity: 'high', issue: 'whole-form high' },
+          { severity: 'medium', issue: 'whole-form medium' }
+        ]
+      }
+    }),
+    form({
+      formId: 'second',
+      accessibility: {
+        score: 34,
+        fieldIssues: [{ field: 'c', severity: 'low', issue: 'another field low' }],
+        formFindings: [{ severity: 'low', issue: 'whole-form low' }]
+      }
+    })
+  ];
+
+  /**
+   * The strip's badges read "<count> <label>". Matched on exact trimmed text
+   * and taking the innermost hit, because an ancestor wrapping only that
+   * badge matches the same string.
+   */
+  const stripBadge = (text: string) => {
+    const matches = screen.getAllByText(
+      (_, element) => element?.textContent?.trim() === text
+    );
+
+    return matches[matches.length - 1];
+  };
+
+  it('counts whole-form findings in the score strip, not just field ones', async () => {
+    await renderReport({ forms: mixedForms, summary: { totalPages: 1, totalForms: 2 } });
+
+    // 2 high (1 field + 1 whole-form), 1 medium (whole-form only),
+    // 3 low (2 field + 1 whole-form). The old strip counted field issues
+    // alone and would have said 1 high, 0 medium, 2 low.
+    expect(stripBadge('2 high')).toBeInTheDocument();
+    expect(stripBadge('1 medium')).toBeInTheDocument();
+    expect(stripBadge('3 low')).toBeInTheDocument();
+  });
+
+  it('reports the same total in both places', async () => {
+    await renderReport({ forms: mixedForms, summary: { totalPages: 1, totalForms: 2 } });
+
+    await openDetails();
+
+    // Six findings in total: three field-level and three whole-form.
+    expect(screen.getByText('6 findings')).toBeInTheDocument();
+
+    const [highFilter] = screen.getAllByRole('button', { name: /high 2/i });
+
+    // The filter counts come from the same place as the strip's badges, so
+    // agreeing here is the invariant that was broken.
+    expect(highFilter).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /medium 1/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /low 3/i })).toBeInTheDocument();
+  });
+
+  it('calls a clean report clean without claiming only fields were checked', async () => {
+    await renderReport({
+      forms: [form({ accessibility: { score: 96, fieldIssues: [], formFindings: [] } })]
+    });
+
+    // Scoped to the strip's own badge: "field-level" is still the right
+    // wording in the per-form overlay, which genuinely shows only those.
+    expect(stripBadge('No issues found')).toBeInTheDocument();
   });
 });

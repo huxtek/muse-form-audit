@@ -30,7 +30,6 @@ import {
   type ModelProvider
 } from "@/defines/modelProviders";
 import { SEVERITY_ORDER, SEVERITY_STYLES } from "@/defines/severities";
-import type { IssueSeverity } from "@/lib/scan-types";
 import FormAnalysisDisplay from "@/components/FormAnalysisDisplay";
 import FormVisualPanel from "@/components/FormVisualPanel";
 import PageMapView from "@/components/PageMapView";
@@ -38,7 +37,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ReportActionBar from "@/components/ReportActionBar";
 import ScoreBreakdown from "@/components/ScoreBreakdown";
 import FindingsList from "@/components/FindingsList";
-import { averageScore } from "@/lib/report-data";
+import { averageScore, collectFindings, countSeverities } from "@/lib/report-data";
 
 /** Result view tabs. Visual is the default; the written findings sit behind Details. */
 const RESULT_TABS = {
@@ -623,16 +622,15 @@ export const AIScanner = () => {
       ? Math.round(scores.reduce((total, score) => total + score, 0) / scores.length)
       : null;
 
-    const counts = forms.reduce(
-      (acc, form) => {
-        for (const issue of form.accessibility?.fieldIssues ?? []) {
-          acc[issue.severity] = (acc[issue.severity] ?? 0) + 1;
-        }
-
-        return acc;
-      },
-      { high: 0, medium: 0, low: 0 } as Record<IssueSeverity, number>
-    );
+    // The same counter the findings list uses, over the same collection.
+    //
+    // This strip used to tally `fieldIssues` alone with its own inline
+    // reduce, so a report with whole-form findings showed two different
+    // totals for the same thing: the live sample read "5 high, 4 medium,
+    // 7 low" here and "20 findings" under Details, because the four
+    // formFindings were counted in one place and not the other. Sharing
+    // `collectFindings` makes that impossible rather than merely fixed.
+    const counts = countSeverities(collectFindings(forms));
 
     return (
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 p-4 rounded-lg border border-border/40 bg-muted/20">
@@ -675,7 +673,10 @@ export const AIScanner = () => {
           {SEVERITY_ORDER.every((severity) => counts[severity] === 0) ? (
             <Badge variant="outline" className="text-xs">
               <CheckCircle className="h-3 w-3 mr-1" />
-              No field-level issues
+              {/* Not "no field-level issues" any more: this now counts
+                  whole-form findings too, so claiming only the field level
+                  would understate what was checked. */}
+              No issues found
             </Badge>
           ) : (
             SEVERITY_ORDER.map((severity) => (
