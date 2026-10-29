@@ -2085,6 +2085,16 @@ Focus on AI agent needs: name attributes, field identification, form submission 
           formFindings: comprehensiveAnalysis.formFindings || [],
           // 'model' or 'heuristic', so the report can say who scored this.
           analysisSource: comprehensiveAnalysis.analysisSource,
+          // Which model actually answered, which is not always the one that
+          // was asked for: the provider takes a stand-in when its preferred
+          // model refuses. This object is rebuilt field by field, so an
+          // addition to the analysis has to be listed here or the report
+          // never sees it -- the badge read "scored by a model" with no name
+          // on every single-page scan until this line existed. The full-crawl
+          // path assigns the analysis wholesale and was unaffected.
+          ...(comprehensiveAnalysis.analysisModel
+            ? { analysisModel: comprehensiveAnalysis.analysisModel }
+            : {}),
           // Whether the screenshot went with the HTML, so a reader can tell
           // whether a visual judgement was actually possible.
           visionUsed: comprehensiveAnalysis.visionUsed ?? false,
