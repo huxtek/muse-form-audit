@@ -253,6 +253,182 @@ describe('AIScanner polling', () => {
     expect(screen.queryByRole('button', { name: /download pdf/i })).not.toBeInTheDocument();
   });
 
+  /**
+   * `jobTarget` and `jobState` have to move together.
+   *
+   * The target was set the moment the scan was asked for, before the POST
+   * went out, while the job itself could only be set once the response came
+   * back. For the length of that round trip the two disagreed, and
+   * `currentJob` -- which is just "the job, if it belongs to the address on
+   * screen" -- resolved to the *previous* scan's finished report under the
+   * *new* scan's address. On a cold Render instance the first request takes
+   * north of twenty seconds, so the old report sat there looking like the
+   * new one's result, and if the request failed it never went away at all.
+   */
+  const completeScanOf = async (url: string) => {
+    startScanMock.mockResolvedValue({ success: true, jobId: 'job-1' });
+    getReportMock.mockResolvedValue(
+      jobRecord({
+        id: 'job-1',
+        url,
+        status: 'completed',
+        progress: 100,
+        results: { forms: [{ formId: 'form-0', accessibility: { score: 71 } }] }
+      })
+    );
+
+    renderScanner();
+
+    fireEvent.change(screen.getByLabelText('Website URL for AI form analysis'), {
+      target: { value: url }
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Start AI form analysis' }));
+    });
+  };
+
+  const startScanOfWithPendingRequest = async (url: string) => {
+    // Never resolves, which holds the page in the window the bug lived in.
+    startScanMock.mockReturnValue(new Promise(() => {}));
+
+    fireEvent.change(screen.getByLabelText('Website URL for AI form analysis'), {
+      target: { value: url }
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Start AI form analysis' }));
+    });
+  };
+
+  it('does not show the previous report while the next scan is starting', async () => {
+    await completeScanOf('https://first.example.com');
+    expect(screen.getByText('Scan complete')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /scan another form/i }));
+    });
+
+    await startScanOfWithPendingRequest('https://second.example.com');
+
+    expect(screen.queryByText('Scan complete')).not.toBeInTheDocument();
+    expect(screen.queryByText('71')).not.toBeInTheDocument();
+  });
+
+  it('does not show the previous report when the same URL is scanned again', async () => {
+    // The sharpest version: the address is identical, so the stale job
+    // matches the new target on the first render.
+    await completeScanOf('https://same.example.com');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /scan another form/i }));
+    });
+
+    await startScanOfWithPendingRequest('https://same.example.com');
+
+    expect(screen.queryByText('Scan complete')).not.toBeInTheDocument();
+  });
+
+  /**
+   * Clearing the state was not enough on its own, and the browser is what
+   * proved it: the new scan cleared the old report correctly, and a second
+   * later it came back.
+   *
+   * Polling is a recursive `setTimeout` that writes whatever it fetches into
+   * the single `jobState`. It only stops once the job it watches is
+   * terminal, so when someone starts a new scan there is almost always one
+   * more request scheduled or in flight for the old one. That response
+   * restored the previous report after the new scan had already cleared it.
+   */
+  it('ignores a poll for the scan the user backed out of', async () => {
+    // Back while a scan is running is the plainest way to be on the form
+    // with a live polling loop still running behind it.
+    startScanMock.mockResolvedValue({ success: true, jobId: 'job-1' });
+    getReportMock.mockResolvedValue(jobRecord({ id: 'job-1', status: 'running', progress: 60 }));
+
+    await submitScan();
+    expect(screen.getByText('RUNNING')).toBeInTheDocument();
+
+    await goBack();
+    expect(location()).toBe('/');
+
+    // It finishes while the user is back on the form, which is the window
+    // the stale write came through.
+    getReportMock.mockResolvedValue(
+      jobRecord({
+        id: 'job-1',
+        status: 'completed',
+        progress: 100,
+        results: { forms: [{ formId: 'form-0', accessibility: { score: 71 } }] }
+      })
+    );
+
+    await startScanOfWithPendingRequest('https://second.example.com');
+
+    const pollsBefore = getReportMock.mock.calls.length;
+
+    await advancePolls(3);
+
+    // Abandoned rather than merely ignored, so it stops asking as well.
+    expect(getReportMock.mock.calls.length).toBe(pollsBefore);
+    expect(screen.queryByText('Scan complete')).not.toBeInTheDocument();
+    expect(screen.queryByText('71')).not.toBeInTheDocument();
+  });
+
+  it('ignores a poll that was already in flight when the next scan began', async () => {
+    // The other half of the guard. Refusing to *start* a stale request is
+    // not enough: one already on the wire comes back after the new scan has
+    // claimed the view, and writes its job into the state regardless.
+    startScanMock.mockResolvedValue({ success: true, jobId: 'job-1' });
+
+    let answerFirstPoll: (job: unknown) => void = () => {};
+    getReportMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        answerFirstPoll = resolve;
+      })
+    );
+
+    await submitScan();
+    await goBack();
+
+    await startScanOfWithPendingRequest('https://second.example.com');
+
+    // Only now does the first scan's poll come back, carrying a full report.
+    await act(async () => {
+      answerFirstPoll(
+        jobRecord({
+          id: 'job-1',
+          status: 'completed',
+          progress: 100,
+          results: { forms: [{ formId: 'form-0', accessibility: { score: 71 } }] }
+        })
+      );
+    });
+
+    expect(screen.queryByText('Scan complete')).not.toBeInTheDocument();
+    expect(screen.queryByText('71')).not.toBeInTheDocument();
+  });
+
+  it('does not leave the previous report on screen when the next scan fails to start', async () => {
+    await completeScanOf('https://first.example.com');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /scan another form/i }));
+    });
+
+    startScanMock.mockRejectedValue(new Error('Real scans are disabled'));
+
+    fireEvent.change(screen.getByLabelText('Website URL for AI form analysis'), {
+      target: { value: 'https://second.example.com' }
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Start AI form analysis' }));
+    });
+
+    expect(screen.queryByText('Scan complete')).not.toBeInTheDocument();
+  });
+
   it('still offers a way out when the scan has failed', async () => {
     // A failure is the state that most needs an exit, and the pinned report
     // bar renders for it because 'failed' is a terminal status.

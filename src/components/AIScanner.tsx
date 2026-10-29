@@ -176,6 +176,52 @@ export const AIScanner = () => {
    */
   const currentJob = jobTarget !== null && jobTarget === scanTarget ? jobState : null;
 
+  /**
+   * Points the view at a target whose results have not arrived yet.
+   *
+   * Both pieces move together, and that is the whole point of having it.
+   * The target used to be set here on its own, the moment the scan was
+   * asked for, while the job could only be set when the POST came back.
+   * For the length of that round trip the two disagreed, and `currentJob`
+   * resolved to the previous scan's finished report under the new scan's
+   * address -- a complete report, with a score, describing the wrong site.
+   *
+   * It was easy to miss locally, where the request takes a few hundred
+   * milliseconds. A cold Render instance takes twenty seconds, and a
+   * request that fails never replaces the job at all, so the stale report
+   * simply stayed.
+   */
+  const beginJobFor = (target: string) => {
+    setJobTarget(target);
+    setJobState(null);
+
+    return claimScan();
+  };
+
+  /**
+   * Which scan the view belongs to, as a number that only goes up.
+   *
+   * Polling is a recursive `setTimeout` that writes whatever it fetches into
+   * the single `jobState`. It stops when the job it is watching reaches a
+   * terminal status, which means there is almost always one more request
+   * either scheduled or already in flight when someone starts a new scan.
+   * That late response restored the previous report a second after the new
+   * scan had cleared it -- clearing the state was not enough on its own,
+   * because the thing that put it back ran afterwards.
+   *
+   * A generation rather than a job-id comparison: the id of the new job is
+   * not known until its POST returns, and the stale window opens before
+   * that.
+   */
+  const scanGenerationRef = useRef(0);
+
+  /** Starts a new generation, invalidating anything in flight for the last. */
+  const claimScan = () => {
+    scanGenerationRef.current += 1;
+
+    return scanGenerationRef.current;
+  };
+
   /** The demo target we have already auto-run, so it runs once per arrival. */
   const demoRanForRef = useRef<string | null>(null);
   // The live socket is an external resource, not render input: nothing in the
@@ -399,6 +445,8 @@ export const AIScanner = () => {
       if (started?.jobId) {
         // Binds the sample to `?url=demo`, so it shows while that is the
         // address and stops showing the moment it is not.
+        const generation = claimScan();
+
         setJobTarget(SCAN_DEMO_TARGET);
         setJobState({
           id: started.jobId,
@@ -416,7 +464,7 @@ export const AIScanner = () => {
 
         // Same path a real scan takes: the socket is opened by the effect
         // watching currentJob, and polling backs it up.
-        pollJobStatus(started.jobId);
+        pollJobStatus(started.jobId, generation);
       }
     } catch (error) {
       toast({
@@ -437,13 +485,25 @@ export const AIScanner = () => {
    * and one of them is now reached from an effect -- where a reference to a
    * `const` declared further down is an access before declaration.
    */
-  const pollJobStatus = async (jobId: string) => {
+  const pollJobStatus = async (jobId: string, generation: number) => {
+    // Checked before the request and again after it: a scan started while
+    // this one was waiting on the network would otherwise have its state
+    // overwritten by a job it has nothing to do with.
+    if (generation !== scanGenerationRef.current) {
+      return;
+    }
+
     try {
       const job = await formAPI.getReport(jobId);
+
+      if (generation !== scanGenerationRef.current) {
+        return;
+      }
+
       setJobState(job);
 
       if (job.status === 'running' || job.status === 'queued') {
-        setTimeout(() => pollJobStatus(jobId), 2000);
+        setTimeout(() => pollJobStatus(jobId, generation), 2000);
       }
     } catch (error) {
       console.error('Polling error:', error);
@@ -550,7 +610,7 @@ export const AIScanner = () => {
 
     // Set alongside the navigation so the results, whenever they land, are
     // bound to the address that asked for them.
-    setJobTarget(url);
+    const generation = beginJobFor(url);
 
     try {
       const scanResults = await formAPI.startScan({
@@ -604,7 +664,7 @@ export const AIScanner = () => {
         });
 
         // Start polling for updates
-        pollJobStatus(scanResults.jobId);
+        pollJobStatus(scanResults.jobId, generation);
       } else {
         throw new Error('Invalid response format');
       }
@@ -918,6 +978,10 @@ export const AIScanner = () => {
       formsFound: 0,
       formsAnalyzed: 0
     });
+    // Ends the finished scan's last poll. It would otherwise keep fetching a
+    // job nobody is looking at, and its answer would be waiting to overwrite
+    // whatever came next.
+    claimScan();
     navigate("/");
   };
 
