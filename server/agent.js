@@ -1,4 +1,5 @@
 import { CrawlerTools, toolDefinitions, missingCredentialsMessage } from './tools.js';
+import { isCancellation } from './lib/cancellation.js';
 import { createLlmProvider } from './lib/llm/index.js';
 import { analyzeFormWithModel } from './lib/analysis/modelFormAnalyzer.js';
 import { attachVisualsToForms } from './lib/visuals/captureFormVisuals.js';
@@ -27,6 +28,22 @@ export class AIAgent {
     this.maxTokensPerRequest = 120000; // GPT-5 has enhanced context capabilities
     this.conversationSummary = ''; // Store conversation summary to reduce token usage
     this.scanStartTime = null; // Track scan duration
+    /**
+     * Aborted by `cancel()`. Separate from `stopRequested`, which means the
+     * usage limit was hit and the partial results are worth keeping.
+     *
+     * A controller rather than a boolean because the slowest thing a scan
+     * does is wait on the network, and a boolean can only be noticed between
+     * steps. A single model attempt may take MODEL_TIMEOUT_MS -- two minutes
+     * by default -- so a flag checked between forms would leave the cancel
+     * button looking broken for most of that.
+     */
+    this.cancelController = new AbortController();
+  }
+
+  /** True once the user has cancelled this scan. */
+  get isCancelled() {
+    return this.cancelController.signal.aborted;
   }
 
   /**
@@ -1791,6 +1808,14 @@ Focus on AI agent needs: name attributes, field identification, form submission 
         currentStep: 'Extracting forms from page...'
       });
       
+      // Loading the page is the first slow step, so this is the earliest
+      // point a cancel pressed during startup can be honoured.
+      if (this.isCancelled) {
+        await this.finishCancelled('before any form was analysed');
+
+        return;
+      }
+
       const extractedForms = await this.tools.extractForms(pageData.html);
       // Pair each form with its screenshot geometry; image bytes go to the
       // screenshot store so they never travel inside the results JSON.
@@ -1856,6 +1881,16 @@ Focus on AI agent needs: name attributes, field identification, form submission 
       let formsAnalyzed = 0;
       
       for (let i = 0; i < formsCount; i++) {
+        // Two different reasons to stop, with two different outcomes. The
+        // usage limit keeps the forms already scored; a cancel publishes
+        // nothing, so it leaves through `finishCancelled` instead of
+        // breaking into the report-building code below.
+        if (this.isCancelled) {
+          await this.finishCancelled(`after ${formsAnalyzed} of ${formsCount} forms`);
+
+          return;
+        }
+
         if (this.stopRequested) {
           console.log(`🛑 Stopping per-form analysis due to usage limit`);
           break;
@@ -1896,6 +1931,15 @@ Focus on AI agent needs: name attributes, field identification, form submission 
           await new Promise(resolve => setTimeout(resolve, 1000));
           
         } catch (formError) {
+          // A cancellation is not a form that failed to analyse. Recording
+          // it as one would put a score-0 "Analysis failed: Scan cancelled"
+          // entry in the report and carry on to the next form.
+          if (isCancellation(formError)) {
+            await this.finishCancelled(`after ${formsAnalyzed} of ${formsCount} forms`);
+
+            return;
+          }
+
           console.error(`❌ Error analyzing form ${i + 1}:`, formError);
           
           // Create a basic form analysis with error info
@@ -1985,6 +2029,15 @@ Focus on AI agent needs: name attributes, field identification, form submission 
       await this.tools.cleanup();
       
     } catch (error) {
+      // Stopping on request is not a failure, and must not be reported as
+      // one or rethrown -- the caller turns a rejection into status
+      // 'failed', which would overwrite the cancellation.
+      if (isCancellation(error)) {
+        await this.finishCancelled();
+
+        return;
+      }
+
       console.error(`❌ Per-form scan failed:`, error);
       
       this.updateProgress({
@@ -2028,6 +2081,9 @@ Focus on AI agent needs: name attributes, field identification, form submission 
       behaviour,
       screenshot: capture?.buffer ?? null,
       screenshotContentType: capture?.contentType ?? 'image/png',
+      // So a cancel lands during the model call, which is where a scan
+      // spends almost all of its time.
+      signal: this.cancelController.signal,
       // The model refuses in patches that clear within a minute, so the
       // provider waits them out instead of degrading to the rule-based
       // score. That wait is silent otherwise: the progress bar holds at the
@@ -2127,6 +2183,14 @@ Focus on AI agent needs: name attributes, field identification, form submission 
       return analysis;
       
     } catch (error) {
+      // The third catch between the model call and the scan loop, and the
+      // one that made the first cancel attempt look like it had done nothing:
+      // the cancellation arrived here, became a score-0 "analysis failed"
+      // form, and the scan went on to publish a complete report.
+      if (isCancellation(error)) {
+        throw error;
+      }
+
       console.error(`❌ Error in comprehensive form analysis:`, error);
       
       // Fallback to basic analysis if comprehensive fails
@@ -2328,6 +2392,43 @@ Focus on AI agent needs: name attributes, field identification, form submission 
     console.log(`🛑 Stopping agent ${this.jobId}`);
     this.isRunning = false;
     this.stopRequested = true;
+    this.cancelController.abort();
+  }
+
+  /**
+   * The user asked for this scan to stop.
+   *
+   * Distinct from `stopDueToUsageLimit`, which finishes the scan and keeps
+   * what it has: that reports `completed_with_errors` with a partial report,
+   * which is right when the limit decided to stop and wrong when the user
+   * did. A cancelled scan publishes no report.
+   */
+  cancel() {
+    console.log(`🛑 Scan cancelled by request: ${this.jobId}`);
+    this.isRunning = false;
+    this.cancelController.abort();
+  }
+
+  /**
+   * Ends a cancelled scan: one final update, then release the browser.
+   *
+   * No results and no error. A cancelled scan has nothing to show, and
+   * reporting it as failed would blame the tool for doing what it was told.
+   * The browser matters here -- a cancelled scan that kept its Browserless
+   * session would hold a paid slot until the socket timed out.
+   */
+  async finishCancelled(detail = '') {
+    console.log(`🛑 Scan cancelled${detail ? ` ${detail}` : ''}: ${this.jobId}`);
+
+    this.isRunning = false;
+
+    this.updateProgress({
+      status: 'cancelled',
+      currentStep: `Scan cancelled${detail ? ` ${detail}` : ''}`,
+      results: null
+    });
+
+    await this.cleanup();
   }
 
   /**
@@ -2342,6 +2443,21 @@ Focus on AI agent needs: name attributes, field identification, form submission 
   }
 
   updateProgress(update) {
+    /*
+     * Nothing but the cancellation itself gets out once cancelled.
+     *
+     * Braces to the rethrows' belt. A cancellation has to survive every
+     * catch between the model call and the scan loop, and there are four of
+     * them; missing one let a cancelled scan publish a finished report with
+     * a score. Rather than trusting that the list stays complete, the one
+     * path every result must travel through refuses to carry anything but
+     * the cancellation. A missed catch can now waste work, which is cheap,
+     * instead of overwriting the user's decision, which is not.
+     */
+    if (this.isCancelled && update.status !== 'cancelled') {
+      return;
+    }
+
     // Add timestamp and additional context
     const enhancedUpdate = {
       ...update,

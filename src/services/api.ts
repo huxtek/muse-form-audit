@@ -86,6 +86,25 @@ export const formAPI = {
     return response.json();
   },
 
+  /**
+   * Stops a scan in progress. The job record survives, so the next poll
+   * reports `cancelled` rather than 404.
+   *
+   * A scan that has already finished answers 409, which the caller can
+   * ignore: there was nothing left to stop.
+   */
+  cancelScan: async (jobId: string) => {
+    const response = await fetch(`${API_BASE_URL}/scan/${jobId}/cancel`, {
+      method: 'POST'
+    });
+
+    if (!response.ok) {
+      await throwResponseError(response, 'Could not cancel the scan');
+    }
+
+    return response.json();
+  },
+
   /** Synchronous single-page analysis. Available, but not used by the UI today. */
   analyzeForm: async (url: string, options?: unknown, devMode?: boolean) => {
     const response = await fetch(`${API_BASE_URL}/analyze`, {

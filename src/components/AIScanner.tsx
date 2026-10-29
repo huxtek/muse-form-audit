@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Bot, Scan, AlertTriangle, CheckCircle, ChevronRight, Clock, Loader2, Zap, Globe, FileText, FlaskConical, Sparkles, Eye } from "lucide-react";
+import { Bot, Scan, AlertTriangle, CheckCircle, ChevronRight, CircleSlash, Clock, Loader2, Zap, Globe, FileText, FlaskConical, Sparkles, Eye } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useDevMode } from "@/contexts/DevModeContext";
@@ -75,12 +75,20 @@ const SAMPLE_REPORT_URL = 'https://skyline-air.example/';
  * progress reporting -- a bar at 100%, a per-form progress panel, and a
  * status badge reading COMPLETED -- before any result.
  */
-const TERMINAL_STATUSES = ['completed', 'completed_with_errors', 'failed'];
+const TERMINAL_STATUSES = ['cancelled', 'completed', 'completed_with_errors', 'failed'];
+
+/** How the collapsed summary line names each way a scan can end. */
+const FINISHED_HEADLINES: Record<string, string> = {
+  cancelled: 'Scan cancelled',
+  completed: 'Scan complete',
+  completed_with_errors: 'Scan complete',
+  failed: 'Scan failed'
+};
 
 interface ScanJob {
   id: string;
   url: string;
-  status: 'queued' | 'running' | 'completed' | 'failed' | 'completed_with_errors';
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'completed_with_errors' | 'cancelled';
   progress: number;
   currentStep: string;
   results?: ScanResults;
@@ -194,6 +202,8 @@ export const AIScanner = () => {
    */
   const [isStarting, setIsStarting] = useState(false);
   const startInFlight = useRef(false);
+  /** Keeps the cancel button from being pressed twice while the POST is out. */
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const beginStart = () => {
     if (startInFlight.current) {
@@ -848,6 +858,46 @@ export const AIScanner = () => {
   };
 
   /**
+   * Stops the running scan.
+   *
+   * No confirmation dialogue: the scan is cheap to start again, and a modal
+   * between the user and the stop button is worse than an accidental stop.
+   *
+   * The server marks the job cancelled before its agent reaches a
+   * checkpoint, so the next poll already reports it. A 409 means the scan
+   * finished in the meantime, which needs no apology -- the poll that
+   * follows shows the report.
+   */
+  const handleCancelScan = async () => {
+    if (!currentJob || isCancelling) {
+      return;
+    }
+
+    setIsCancelling(true);
+
+    try {
+      await formAPI.cancelScan(currentJob.id);
+      toast({
+        title: 'Scan cancelled',
+        description: 'Nothing further will be analysed.'
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not cancel the scan';
+
+      // A scan that has already finished is not a failed cancel.
+      if (!/already finished/i.test(message)) {
+        toast({
+          title: 'Could not cancel the scan',
+          description: message,
+          variant: 'destructive'
+        });
+      }
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  /**
    * "New Scan" is a navigation, not a state reset.
    *
    * Clearing state here as well would leave the address bar still naming the
@@ -881,6 +931,9 @@ export const AIScanner = () => {
         return <CheckCircle className="h-5 w-5 text-green-500" />;
       case 'failed':
         return <AlertTriangle className="h-5 w-5 text-red-500" />;
+      case 'cancelled':
+        // Not an error icon: the scan did what it was told.
+        return <CircleSlash className="h-5 w-5 text-muted-foreground" />;
       default:
         return <Bot className="h-5 w-5" />;
     }
@@ -1327,7 +1380,7 @@ export const AIScanner = () => {
                 <summary className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground cursor-pointer list-none">
                   {getStatusIcon(currentJob.status)}
                   <span className="text-foreground font-medium">
-                    {currentJob.status === 'failed' ? 'Scan failed' : 'Scan complete'}
+                    {FINISHED_HEADLINES[currentJob.status] ?? 'Scan complete'}
                   </span>
                   <span>&middot;</span>
                   <span>{currentJob.modelLabel ?? 'Unknown model'}</span>
@@ -1506,14 +1559,25 @@ export const AIScanner = () => {
                 )}
 
                 {/*
-                  No action buttons here. This card only renders while the
-                  scan is queued or running, so the only thing a button could
-                  offer mid-scan is abandoning the scan just started -- and
-                  "New Scan" does not even cancel it, it navigates away and
-                  leaves the crawler running. Every finished state, failures
-                  included, gets ReportActionBar above with its own new-scan
-                  and download actions.
+                  One action, and it is the only one that makes sense while a
+                  scan is running. "New Scan" used to sit here, which offered
+                  to walk away from the scan without stopping it.
+
+                  Every finished state, failures included, gets
+                  ReportActionBar above with its own new-scan and download
+                  actions, so this card needs nothing else.
                 */}
+                <div className="flex justify-center">
+                  <Button
+                    onClick={handleCancelScan}
+                    variant="outline"
+                    size="sm"
+                    disabled={isCancelling}
+                  >
+                    <CircleSlash className="h-4 w-4 mr-2" />
+                    {isCancelling ? 'Stopping...' : 'Cancel scan'}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )}

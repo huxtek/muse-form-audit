@@ -17,6 +17,7 @@
  *     results are fed back as `function_call_output` input items.
  */
 
+import { cancellableDelay, isCancellation, throwIfCancelled } from '../cancellation.js';
 import { readEnvValue } from './envValue.js';
 
 export const MUSE_ENDPOINT = 'https://api.meta.ai/v1/responses';
@@ -50,7 +51,6 @@ const asRetryable = (error) => {
 
 const isRetryable = (error) => Boolean(error?.[RETRYABLE]);
 
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export const MUSE_DEFAULT_MODEL = 'muse-wonder-1.0';
 
 // NOTE: this default is also what a misconfigured MUSE_MODEL falls back to,
@@ -326,7 +326,16 @@ export function createMuseProvider({
       responseFormat,
       // Called on each refusal so a caller can tell the user why the scan is
       // taking longer, instead of leaving it looking stalled.
-      onRetry
+      onRetry,
+      /**
+       * Aborted when the user cancels the scan.
+       *
+       * Checked between attempts and threaded into the request itself,
+       * because a single attempt may take up to MODEL_TIMEOUT_MS -- two
+       * minutes by default. Waiting for it to return before noticing the
+       * cancel would make the button look broken.
+       */
+      signal
     }) {
       if (!apiKey) {
         throw new Error(
@@ -350,6 +359,8 @@ export function createMuseProvider({
       let attempt = 0;
 
       while (true) {
+        throwIfCancelled(signal);
+
         attempt += 1;
 
         const candidate = chain[(attempt - 1) % chain.length];
@@ -364,7 +375,7 @@ export function createMuseProvider({
         });
 
         try {
-          const completion = await attemptCompletion(body, candidate);
+          const completion = await attemptCompletion(body, candidate, signal);
 
           if (attempt > 1) {
             logger?.log?.(
@@ -374,6 +385,11 @@ export function createMuseProvider({
 
           return completion;
         } catch (error) {
+          // Not a failure to retry or report: the user asked us to stop.
+          if (isCancellation(error)) {
+            throw error;
+          }
+
           lastError = error;
 
           // A rejected credential or a malformed request will be rejected by
@@ -409,14 +425,20 @@ export function createMuseProvider({
             requestId: error.requestId ?? null
           });
 
-          await delay(retryDelayMs);
+          await cancellableDelay(retryDelayMs, signal);
         }
       }
     }
   };
 
-  async function attemptCompletion(body, candidate) {
+  async function attemptCompletion(body, candidate, signal) {
     let response;
+
+    // A cancel and a timeout both abort the request, so both are expressed
+    // as signals and combined. `AbortSignal.any` settles on whichever fires
+    // first and the check below decides which it was.
+    const deadline = AbortSignal.timeout(timeoutMs);
+    const abortOn = signal ? AbortSignal.any([deadline, signal]) : deadline;
 
     try {
       response = await fetch(endpoint, {
@@ -426,9 +448,14 @@ export function createMuseProvider({
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(timeoutMs)
+        signal: abortOn
       });
     } catch (error) {
+      // A cancelled request looks exactly like a timed-out one from here.
+      // Without asking the signal which it was, a cancel would be reported
+      // as a transport blip and retried for the rest of the budget.
+      throwIfCancelled(signal);
+
       throw asRetryable(
         new Error(`Muse request failed: ${redactKey(error.message, apiKey)}`)
       );

@@ -46,13 +46,12 @@ export const ReportActionBar = ({
   // The analyser replaces the requested model in the subtitle, because what
   // answered is the honest thing to name. They differ whenever a stand-in
   // was used or the call fell through to rules.
-  const subtitle = [
-    url,
-    formCount === 1 ? '1 form' : `${formCount} forms`,
-    analyser.label || modelLabel
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  // A count of zero is omitted rather than printed. A cancelled scan has no
+  // analysed forms, and "0 forms" next to a URL reads as a finding about the
+  // site -- httpbin.org/forms/post has a form; we just never got to it.
+  const formSummary = formCount === 0 ? null : formCount === 1 ? '1 form' : `${formCount} forms`;
+
+  const subtitle = [url, formSummary, analyser.label || modelLabel].filter(Boolean).join(' · ');
 
   return (
       /*

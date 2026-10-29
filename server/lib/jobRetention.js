@@ -20,7 +20,15 @@
  *   less valuable than staying alive.
  */
 
-const TERMINAL_STATUSES = new Set(['completed', 'completed_with_errors', 'failed']);
+// 'cancelled' belongs here as much as the rest: nothing more will arrive for
+// it, so leaving it out would keep every cancelled job, and its screenshot
+// bytes, until the process died.
+const TERMINAL_STATUSES = new Set([
+  'cancelled',
+  'completed',
+  'completed_with_errors',
+  'failed'
+]);
 
 const toInt = (value, fallback) => {
   const parsed = Number.parseInt(value, 10);

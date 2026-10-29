@@ -81,6 +81,7 @@ vi.mock('@/services/api', () => ({
     startScan: vi.fn(),
     startDemo: vi.fn(),
     getReport: vi.fn(),
+    cancelScan: vi.fn(),
     analyzeForm: vi.fn()
   }
 }));
@@ -88,6 +89,7 @@ vi.mock('@/services/api', () => ({
 const startScanMock = vi.mocked(formAPI.startScan);
 const startDemoMock = vi.mocked(formAPI.startDemo);
 const getReportMock = vi.mocked(formAPI.getReport);
+const cancelScanMock = vi.mocked(formAPI.cancelScan);
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -201,7 +203,7 @@ describe('AIScanner polling', () => {
    * Removing it is only safe while every finished state still offers a way
    * out, so both halves are asserted here.
    */
-  it('offers no action inside the progress card while a scan is running', async () => {
+  it('offers no action inside the progress card while a scan is running, except stopping it', async () => {
     getReportMock.mockResolvedValue(jobRecord({ status: 'running', progress: 45 }));
 
     await submitScan();
@@ -209,6 +211,46 @@ describe('AIScanner polling', () => {
     expect(screen.getByText('RUNNING')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /new scan/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /download/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /cancel scan/i })).toBeInTheDocument();
+  });
+
+  it('asks the server to stop the scan it is actually showing', async () => {
+    // The previous mid-scan button navigated away and left the crawler
+    // running. This one has to reach the backend with the right job id.
+    getReportMock.mockResolvedValue(jobRecord({ status: 'running', progress: 45 }));
+    cancelScanMock.mockResolvedValue({ success: true, status: 'cancelled' });
+
+    await submitScan();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /cancel scan/i }));
+    });
+
+    expect(cancelScanMock).toHaveBeenCalledWith('job-1');
+  });
+
+  it('stops polling a cancelled job and says it was cancelled', async () => {
+    getReportMock.mockResolvedValue(
+      jobRecord({ status: 'cancelled', currentStep: 'Scan cancelled after 0 of 1 forms' })
+    );
+
+    await submitScan();
+
+    expect(getReportMock).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText('Scan cancelled').length).toBeGreaterThan(0);
+
+    await advancePolls(5);
+
+    expect(getReportMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers a way out of a cancelled scan, and nothing to download', async () => {
+    getReportMock.mockResolvedValue(jobRecord({ status: 'cancelled' }));
+
+    await submitScan();
+
+    expect(screen.getByRole('button', { name: /scan another form/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /download pdf/i })).not.toBeInTheDocument();
   });
 
   it('still offers a way out when the scan has failed', async () => {

@@ -25,7 +25,7 @@ import {
   putScreenshot,
   screenshotStoreStats
 } from './lib/visuals/screenshotStore.js';
-import { getRetentionConfig, sweepJobs } from './lib/jobRetention.js';
+import { getRetentionConfig, isTerminal, sweepJobs } from './lib/jobRetention.js';
 import {
   SAMPLE_FIELD_ISSUES,
   SAMPLE_FORM_FINDINGS,
@@ -117,6 +117,8 @@ app.use(rateLimitInfo);
 // In-memory job store. Swap for a shared store if you run more than one process.
 const jobs = new Map();
 const agents = new Map();
+/** Pending steps of mock runs, so cancelling one can stop its timeline. */
+const mockTimers = new Map();
 
 /**
  * Whether real scans are allowed on this instance.
@@ -463,6 +465,12 @@ function runMockTimeline(jobId, timeline) {
     const currentJob = jobs.get(jobId);
     if (!currentJob) return;
 
+    // A mock run has no agent to stop, so cancelling it means refusing to
+    // apply what is already scheduled. Without this the remaining steps
+    // would overwrite the cancellation and the job would finish as though
+    // nothing had happened.
+    if (currentJob.status === 'cancelled') return;
+
     Object.assign(currentJob, update);
     jobs.set(jobId, currentJob);
     broadcastUpdate(jobId, { jobId, ...update });
@@ -473,9 +481,19 @@ function runMockTimeline(jobId, timeline) {
     return;
   }
 
-  timeline.forEach(([fraction, update]) => {
-    setTimeout(() => apply(update), Math.round(fraction * MOCK_SCAN_DELAY_MS));
-  });
+  const timers = timeline.map(([fraction, update]) =>
+    setTimeout(() => apply(update), Math.round(fraction * MOCK_SCAN_DELAY_MS))
+  );
+
+  mockTimers.set(jobId, timers);
+}
+
+/** Clears a mock run's pending steps, so a cancelled one stops broadcasting. */
+function clearMockTimeline(jobId) {
+  const timers = mockTimers.get(jobId) ?? [];
+
+  timers.forEach(clearTimeout);
+  mockTimers.delete(jobId);
 }
 
 // =============================================================================
@@ -804,6 +822,71 @@ app.get('/api/jobs', (req, res) => {
   }));
 
   res.json({ jobs: jobList, total: jobList.length, active_agents: agents.size });
+});
+
+/**
+ * Stops a scan the user no longer wants.
+ *
+ * Distinct from `DELETE /api/job/:jobId`, which also forgets the record: the
+ * UI needs the job to survive so it can poll once more, see `cancelled` and
+ * say so. Deleting it would answer the next poll with 404, which the client
+ * reads as a job that never existed.
+ *
+ * Idempotent by way of 409: a scan that has already finished cannot be
+ * cancelled, and saying so is more useful than a silent success that implies
+ * work was stopped.
+ */
+app.post('/api/scan/:jobId/cancel', (req, res) => {
+  const { jobId } = req.params;
+  const job = jobs.get(jobId);
+
+  if (!job) {
+    res.status(404).json({ error: 'Not Found', message: 'Unknown job' });
+
+    return;
+  }
+
+  if (isTerminal(job)) {
+    res.status(409).json({
+      error: 'Conflict',
+      message: `This scan has already finished (${job.status}).`,
+      status: job.status
+    });
+
+    return;
+  }
+
+  const agent = agents.get(jobId);
+
+  // Marked here rather than waiting for the agent, because the agent may be
+  // several seconds from its next checkpoint and the client polls sooner
+  // than that. The agent's own update follows with the detail of how far it
+  // had got.
+  job.status = 'cancelled';
+  job.currentStep = 'Cancelling...';
+  job.results = null;
+  jobs.set(jobId, job);
+
+  if (agent) {
+    agent.cancel();
+    agents.delete(jobId);
+  } else {
+    // A mock run, or a real one whose agent has already been released.
+    clearMockTimeline(jobId);
+    job.currentStep = 'Scan cancelled';
+    jobs.set(jobId, job);
+  }
+
+  broadcastUpdate(jobId, {
+    type: 'progress',
+    jobId,
+    status: 'cancelled',
+    currentStep: job.currentStep
+  });
+
+  console.log(`🛑 Cancel requested for job ${jobId}`);
+
+  res.json({ success: true, jobId, status: 'cancelled' });
 });
 
 app.delete('/api/job/:jobId', (req, res) => {

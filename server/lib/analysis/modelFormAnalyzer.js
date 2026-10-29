@@ -7,6 +7,7 @@
  * a rate limit, or an unparseable response degrades to the previous behaviour
  * instead of failing the scan.
  */
+import { isCancellation } from '../cancellation.js';
 import {
   ANALYSIS_SOURCES,
   CATEGORY_MAX_SCORES,
@@ -181,6 +182,8 @@ export async function analyzeFormWithModel({
    * minute needs to say why or it reads as stalled.
    */
   onRetry = null,
+  /** Aborted when the user cancels the scan. Passed through to the provider. */
+  signal = null,
   logger = console
 }) {
   const fallback = () => {
@@ -231,7 +234,8 @@ export async function analyzeFormWithModel({
       ],
       maxTokens,
       responseFormat: 'json_object',
-      onRetry
+      onRetry,
+      signal
     });
 
     const text = completion?.choices?.[0]?.message?.content;
@@ -263,6 +267,13 @@ export async function analyzeFormWithModel({
 
     return analysis;
   } catch (error) {
+    // A cancelled scan is the one case that must not degrade. Falling back
+    // here would hand back a rule-based report for a scan the user stopped,
+    // and the agent would go on to score the next form.
+    if (isCancellation(error)) {
+      throw error;
+    }
+
     // A model problem must never fail the scan.
     logger.warn?.(`   ⚠️  Model analysis failed (${error.message}) - using heuristic analysis`);
 

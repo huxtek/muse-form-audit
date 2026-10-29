@@ -1,4 +1,5 @@
 import { AIAgent } from './agent.js';
+import { isCancellation, throwIfCancelled } from './lib/cancellation.js';
 import { attachVisualsToForms } from './lib/visuals/captureFormVisuals.js';
 import { putPageMap, putScreenshot } from './lib/visuals/screenshotStore.js';
 import { attachBehaviourToForms } from './lib/analysis/probeFormBehaviour.js';
@@ -132,6 +133,11 @@ export class ImprovedFullCrawlAgent extends AIAgent {
     const formsPerPage = [];
 
     for (let i = 0; i < this.discoveredPages.length; i++) {
+      // Thrown rather than returned: this runs two calls deep inside
+      // startScan, and returning early would let the crawl carry on to the
+      // next phase with nothing discovered.
+      throwIfCancelled(this.cancelController.signal);
+
       const pageUrl = this.discoveredPages[i];
       const progress = 15 + (i / this.discoveredPages.length) * 25; // 15-40%
       
@@ -238,6 +244,8 @@ export class ImprovedFullCrawlAgent extends AIAgent {
     const analyzedForms = [];
 
     for (let i = 0; i < this.allFormsFromAllPages.length; i++) {
+      throwIfCancelled(this.cancelController.signal);
+
       // Check usage limit before analyzing each form
       if (this.isUsageLimitReached()) {
         console.log(`⚠️ Usage limit reached (${this.getUsageLimit()}). Stopping analysis.`);
@@ -308,6 +316,12 @@ export class ImprovedFullCrawlAgent extends AIAgent {
         await new Promise(resolve => setTimeout(resolve, 300));
         
       } catch (error) {
+        // A cancellation is not a form that failed to analyse, and recording
+        // it as one would both pollute the report and keep the crawl going.
+        if (isCancellation(error)) {
+          throw error;
+        }
+
         console.error(`❌ Error analyzing form ${form.formId}:`, error.message);
         
         // Still count as analyzed for usage tracking
@@ -411,10 +425,14 @@ export class ImprovedFullCrawlAgent extends AIAgent {
     try {
       // Phase 1: Discover all pages systematically
       await this.discoverAllPages();
-      
+
+      throwIfCancelled(this.cancelController.signal);
+
       // Phase 2: Find all forms across all pages
       await this.discoverAllForms();
-      
+
+      throwIfCancelled(this.cancelController.signal);
+
       // Phase 3: Analyze forms individually (reusing parent's logic)
       const analyzedForms = await this.analyzeFormsIndividually();
 
@@ -440,6 +458,18 @@ export class ImprovedFullCrawlAgent extends AIAgent {
       return results;
 
     } catch (error) {
+      // Every cancellation checkpoint in the crawl throws, and they all land
+      // here. Reporting it as a failure would blame the crawler for stopping
+      // when it was told to, and rethrowing would let the caller overwrite
+      // the cancellation with status 'failed'.
+      if (isCancellation(error)) {
+        await this.finishCancelled(
+          `after ${this.tools.formsAnalyzedCount} form(s) across ${this.totalPagesScanned} page(s)`
+        );
+
+        return null;
+      }
+
       console.error(`❌ Full crawl failed:`, error);
       
       this.updateProgress({
