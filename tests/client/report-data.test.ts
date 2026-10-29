@@ -4,7 +4,8 @@ import {
   aggregateCategories,
   averageScore,
   collectFindings,
-  countSeverities
+  countSeverities,
+  describeAnalyser
 } from '@/lib/report-data';
 import type { AnalyzedForm } from '@/lib/scan-types';
 
@@ -262,5 +263,82 @@ describe('averageScore', () => {
   it('is null when nothing was scored, so no figure is printed', () => {
     expect(averageScore([form()])).toBeNull();
     expect(averageScore([])).toBeNull();
+  });
+});
+
+/**
+ * A failed model call produces a report that looks entirely successful: the
+ * rule-based fallback returns a plausible score and eight populated
+ * categories. The only tells were indirect, and two people looked at the
+ * same live report and disagreed about which analyser had produced it. This
+ * is what makes it legible.
+ */
+describe('describeAnalyser', () => {
+  const scored = (source?: string, model?: string): AnalyzedForm =>
+    form({
+      accessibility: {
+        score: 70,
+        ...(source ? { analysisSource: source as 'model' | 'heuristic' } : {}),
+        ...(model ? { analysisModel: model } : {})
+      }
+    });
+
+  it('names the model that answered', () => {
+    expect(describeAnalyser([scored('model', 'muse-wonder-1.0')])).toMatchObject({
+      source: 'model',
+      label: 'Muse Wonder',
+      usedFallback: false
+    });
+  });
+
+  it('names the stand-in when one answered, not the model that was asked for', () => {
+    expect(describeAnalyser([scored('model', 'muse-spark-1.3')])).toMatchObject({
+      source: 'model',
+      label: 'Muse Spark'
+    });
+  });
+
+  it('says rule-based when no model scored it', () => {
+    // The case that mattered: this used to be indistinguishable on screen
+    // from a real AI audit.
+    expect(describeAnalyser([scored('heuristic')])).toMatchObject({
+      source: 'heuristic',
+      label: 'Rule-based',
+      usedFallback: true
+    });
+  });
+
+  it('reports a split scan as mixed, and flags the fallback', () => {
+    const summary = describeAnalyser([
+      scored('model', 'muse-wonder-1.0'),
+      scored('heuristic')
+    ]);
+
+    expect(summary.source).toBe('mixed');
+    expect(summary.label).toBe('Mixed');
+    expect(summary.usedFallback).toBe(true);
+  });
+
+  it('collapses several models rather than listing them in a badge', () => {
+    const summary = describeAnalyser([
+      scored('model', 'muse-wonder-1.0'),
+      scored('model', 'muse-spark-1.3')
+    ]);
+
+    expect(summary.label).toBe('AI');
+    expect(summary.models).toEqual(['muse-wonder-1.0', 'muse-spark-1.3']);
+  });
+
+  it('does not invent a label when nothing said what scored it', () => {
+    expect(describeAnalyser([form()])).toMatchObject({
+      source: 'unknown',
+      label: '',
+      usedFallback: false
+    });
+    expect(describeAnalyser([])).toMatchObject({ source: 'unknown', label: '' });
+  });
+
+  it('passes through a model id it has no friendly name for', () => {
+    expect(describeAnalyser([scored('model', 'muse-future-2.0')]).label).toBe('muse-future-2.0');
   });
 });

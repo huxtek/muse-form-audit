@@ -267,10 +267,40 @@ export function createMuseProvider({
   endpoint = readEnvValue('MUSE_ENDPOINT', MUSE_ENDPOINT),
   reasoningEffort = readEnvValue('MUSE_REASONING_EFFORT', 'low'),
   timeoutMs = Number(readEnvValue('MODEL_TIMEOUT_MS', '120000')),
-  // Three attempts against a measured 50% per-call failure rate leaves
-  // roughly one scan in eight still falling back, from one in two.
-  maxAttempts = Number(readEnvValue('MUSE_MAX_ATTEMPTS', '3')),
-  retryDelayMs = Number(readEnvValue('MUSE_RETRY_DELAY_MS', '600')),
+  /**
+   * Attempts per model.
+   *
+   * Measured: `model_not_found` arrives on about a quarter of calls, and the
+   * failures are independent -- 20 sequential identical requests from one
+   * client gave 5 failures interleaved with 15 successes, longest failure
+   * run 2. So each retry is an independent quarter-chance, and five attempts
+   * leave roughly one call in a thousand unserved.
+   *
+   * Retrying is close to free here because the failure is fast: refusals
+   * came back in 106ms, 125ms and 309ms, against successes of seconds and
+   * whole analyses of 8 to 40 seconds. The user cannot perceive it.
+   */
+  maxAttempts = Number(readEnvValue('MUSE_MAX_ATTEMPTS', '5')),
+  /**
+   * 200ms, scaled by attempt. Short on purpose: the failures are
+   * independent rather than congestion, so there is nothing to back off
+   * from -- the delay only avoids hammering. The previous 600ms was sized
+   * for a theory about multi-minute outages that the data disproved.
+   */
+  retryDelayMs = Number(readEnvValue('MUSE_RETRY_DELAY_MS', '200')),
+  /**
+   * Stand-ins, tried in order once the preferred model is exhausted.
+   *
+   * muse-spark-1.3 is generally available rather than preview, takes the
+   * same request on the same endpoint, and answered every call in every
+   * observation including vision. A report it produces is still a real
+   * audit -- findings attributed to controls, a written narrative -- which
+   * the rule-based fallback is not.
+   */
+  fallbackModels = (readEnvValue('MUSE_FALLBACK_MODELS', 'muse-spark-1.3') ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean),
   logger = console
 } = {}) {
   return {
@@ -289,33 +319,51 @@ export function createMuseProvider({
         );
       }
 
-      const body = toMuseRequest({
-        messages,
-        tools,
-        toolChoice,
-        maxTokens,
-        reasoningEffort,
-        responseFormat,
-        model
-      });
-
+      // Preferred model first, then any stand-ins. Each gets the full
+      // attempt budget before the next is tried.
+      const chain = [model, ...fallbackModels].filter(Boolean);
       let lastError;
 
-      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        try {
-          return await attemptCompletion(body);
-        } catch (error) {
-          lastError = error;
+      for (const candidate of chain) {
+        const body = toMuseRequest({
+          messages,
+          tools,
+          toolChoice,
+          maxTokens,
+          reasoningEffort,
+          responseFormat,
+          model: candidate
+        });
 
-          if (!isRetryable(error) || attempt === maxAttempts) {
-            throw error;
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          try {
+            const completion = await attemptCompletion(body, candidate);
+
+            if (candidate !== chain[0]) {
+              logger?.warn?.(
+                `   ⤵ ${chain[0]} unavailable after ${maxAttempts} attempts - scored with ${candidate} instead`
+              );
+            }
+
+            return completion;
+          } catch (error) {
+            lastError = error;
+
+            // A rejected credential or a malformed request will be rejected
+            // by every model in the chain. Fail now rather than working
+            // through the list to reach the same answer three times slower.
+            if (!isRetryable(error)) {
+              throw error;
+            }
+
+            if (attempt < maxAttempts) {
+              logger?.warn?.(
+                `   ↻ ${error.message} - retrying (${attempt}/${maxAttempts - 1})`
+              );
+
+              await delay(retryDelayMs * attempt);
+            }
           }
-
-          logger?.warn?.(
-            `   ↻ ${error.message} - retrying (${attempt}/${maxAttempts - 1})`
-          );
-
-          await delay(retryDelayMs * attempt);
         }
       }
 
@@ -323,7 +371,7 @@ export function createMuseProvider({
     }
   };
 
-  async function attemptCompletion(body) {
+  async function attemptCompletion(body, candidate) {
     let response;
 
     try {
@@ -396,6 +444,9 @@ export function createMuseProvider({
       throw new Error(`Muse API error: ${redactKey(payload.error.message ?? 'unknown', apiKey)}`);
     }
 
-    return fromMuseResponse(payload);
+    // The model that actually answered travels with the response, so a
+    // report produced by a stand-in can say so rather than claiming the
+    // model that was asked for.
+    return { ...fromMuseResponse(payload), model: payload.model ?? candidate };
   }
 }

@@ -180,3 +180,86 @@ export const averageScore = (forms: AnalyzedForm[] = []): number | null => {
     ? Math.round(scores.reduce((total, score) => total + score, 0) / scores.length)
     : null;
 };
+
+/** What produced the scores in a report. */
+export interface AnalyserSummary {
+  /** 'mixed' when some forms were scored by a model and others were not. */
+  source: 'model' | 'heuristic' | 'mixed' | 'unknown';
+  /** Distinct models that answered, in the order first seen. */
+  models: string[];
+  /** Short label for a badge: "Muse Wonder", "Rule-based", "Mixed". */
+  label: string;
+  /** True when any form fell back to rules, which is worth flagging. */
+  usedFallback: boolean;
+}
+
+/** Turns a model id into something a reader recognises. */
+const MODEL_LABELS: Record<string, string> = {
+  'muse-wonder-1.0': 'Muse Wonder',
+  'muse-spark-1.1': 'Muse Spark 1.1',
+  'muse-spark-1.2': 'Muse Spark 1.2',
+  'muse-spark-1.3': 'Muse Spark'
+};
+
+export const labelModel = (model: string): string => MODEL_LABELS[model] ?? model;
+
+/**
+ * Says what scored the report, so a reader never has to guess.
+ *
+ * This exists because a failed model call produces a report that looks
+ * entirely successful: the rule-based fallback returns a plausible score and
+ * eight populated categories, and the only tells were indirect -- an
+ * annotated screenshot with no boxes, and a findings list reading "Nothing
+ * to fix" for a form with real problems. Two people looked at the same live
+ * report and disagreed about which analyser had produced it.
+ *
+ * The model that answered is not always the one that was asked for, either:
+ * the server falls back to a stand-in when its preferred model is
+ * unavailable, so the report has to name what actually ran.
+ */
+export const describeAnalyser = (forms: AnalyzedForm[] = []): AnalyserSummary => {
+  const sources = forms
+    .map((form) => form.accessibility?.analysisSource)
+    .filter((source): source is 'model' | 'heuristic' => Boolean(source));
+
+  const models: string[] = [];
+  for (const form of forms) {
+    const model = form.accessibility?.analysisModel;
+
+    if (model && !models.includes(model)) {
+      models.push(model);
+    }
+  }
+
+  const hasModel = sources.includes('model');
+  const hasHeuristic = sources.includes('heuristic');
+
+  let source: AnalyserSummary['source'] = 'unknown';
+  if (hasModel && hasHeuristic) {
+    source = 'mixed';
+  } else if (hasModel) {
+    source = 'model';
+  } else if (hasHeuristic) {
+    source = 'heuristic';
+  }
+
+  const label = (() => {
+    if (source === 'heuristic') {
+      return 'Rule-based';
+    }
+
+    if (source === 'mixed') {
+      return 'Mixed';
+    }
+
+    if (source === 'model') {
+      // One model named outright; several summarised, since a badge cannot
+      // carry a list.
+      return models.length === 1 ? labelModel(models[0]) : 'AI';
+    }
+
+    return '';
+  })();
+
+  return { source, models, label, usedFallback: hasHeuristic };
+};

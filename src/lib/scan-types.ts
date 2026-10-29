@@ -186,6 +186,12 @@ export interface FormAccessibility {
    */
   analysisSource?: 'model' | 'heuristic';
   /**
+   * The model that actually answered, which is not always the one that was
+   * asked for: the server falls back to a stand-in when its preferred model
+   * is unavailable. Absent on a heuristic analysis.
+   */
+  analysisModel?: string;
+  /**
    * Whether the form's screenshot was sent with its HTML. False means any
    * visual judgement was unavailable, not that there was nothing to find.
    */

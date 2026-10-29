@@ -236,10 +236,19 @@ export async function analyzeFormWithModel({
 
     const analysis = parseModelAnalysis(text);
     analysis.visionUsed = useImage;
+    // Which model actually answered, which is not always the one asked for:
+    // the provider falls back to a stand-in when its preferred model is
+    // unavailable. Recorded per form so the report can attribute the score
+    // honestly instead of naming the model that was requested.
+    analysis.analysisModel = completion?.model ?? provider.model;
 
     const used = completion?.usage?.total_tokens;
+    const answeredBy =
+      analysis.analysisModel && analysis.analysisModel !== provider.model
+        ? ` via ${analysis.analysisModel}`
+        : '';
     logger.log?.(
-      `   🤖 ${provider.label} scored ${formId || 'form'}: ${analysis.score}/100` +
+      `   🤖 ${provider.label}${answeredBy} scored ${formId || 'form'}: ${analysis.score}/100` +
         (useImage ? ' [with screenshot]' : '') +
         (used ? ` (${used} tokens)` : '')
     );

@@ -37,7 +37,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ReportActionBar from "@/components/ReportActionBar";
 import ScoreBreakdown from "@/components/ScoreBreakdown";
 import FindingsList from "@/components/FindingsList";
-import { averageScore, collectFindings, countSeverities } from "@/lib/report-data";
+import {
+  averageScore,
+  collectFindings,
+  countSeverities,
+  describeAnalyser
+} from "@/lib/report-data";
 
 /** Result view tabs. Visual is the default; the written findings sit behind Details. */
 const RESULT_TABS = {
@@ -225,6 +230,8 @@ export const AIScanner = () => {
   const isFinished = Boolean(currentJob) && TERMINAL_STATUSES.includes(currentJob?.status ?? '');
   const reportForms = currentJob?.results?.forms ?? [];
   const reportScore = averageScore(reportForms);
+  /** What scored the report: a named model, rules, or a mix of both. */
+  const reportAnalyser = describeAnalyser(reportForms);
   const [perFormProgress, setPerFormProgress] = useState<PerFormProgress>({
     formsFound: 0,
     formsAnalyzed: 0
@@ -657,6 +664,15 @@ export const AIScanner = () => {
 
             <div className="text-xs text-muted-foreground mt-1">
               {forms.length > 1 ? 'Average AI compatibility' : 'AI compatibility'}
+              {/* Named here too: this strip is the part that gets
+                  screenshotted on its own, and a score with no attribution
+                  reads as whatever the viewer assumes. */}
+              {reportAnalyser.label && (
+                <span className={reportAnalyser.usedFallback ? 'text-amber-400' : ''}>
+                  {' · '}
+                  {reportAnalyser.label}
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -1299,6 +1315,7 @@ export const AIScanner = () => {
                 formCount={reportForms.length}
                 modelLabel={currentJob.modelLabel}
                 isSampleRun={isSampleRun}
+                analyser={reportAnalyser}
                 onDownload={currentJob.results ? downloadReport : undefined}
                 onNewScan={resetScan}
               />

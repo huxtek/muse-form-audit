@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Download, Scan } from 'lucide-react';
+import type { AnalyserSummary } from '@/lib/report-data';
 
 interface ReportActionBarProps {
   /** The headline figure, omitted when nothing carried a score. */
@@ -12,6 +13,8 @@ interface ReportActionBarProps {
   modelLabel?: string;
   /** True for the sample report and any dev-mode run. */
   isSampleRun: boolean;
+  /** What produced the scores, so the bar can attribute them. */
+  analyser: AnalyserSummary;
   /** Absent while there is nothing to export. */
   onDownload?: () => void;
   onNewScan: () => void;
@@ -36,13 +39,17 @@ export const ReportActionBar = ({
   formCount,
   modelLabel,
   isSampleRun,
+  analyser,
   onDownload,
   onNewScan
 }: ReportActionBarProps) => {
+  // The analyser replaces the requested model in the subtitle, because what
+  // answered is the honest thing to name. They differ whenever a stand-in
+  // was used or the call fell through to rules.
   const subtitle = [
     url,
     formCount === 1 ? '1 form' : `${formCount} forms`,
-    modelLabel
+    analyser.label || modelLabel
   ]
     .filter(Boolean)
     .join(' · ');
@@ -76,6 +83,20 @@ export const ReportActionBar = ({
                 className="ml-1 text-[10px] uppercase tracking-wide border-amber-500/60 text-amber-400"
               >
                 Sample
+              </Badge>
+            )}
+
+            {/* A score from rules is a different claim from a score a model
+                reasoned about, and until now the report presented them
+                identically. Flagged amber only when rules were involved:
+                a successful AI audit needs naming, not warning about. */}
+            {analyser.usedFallback && (
+              <Badge
+                variant="outline"
+                className="ml-1 text-[10px] uppercase tracking-wide border-amber-500/60 text-amber-400"
+                title="The AI model was unavailable, so rule-based checks produced this score. Rules find fewer issues and cannot annotate the screenshot."
+              >
+                {analyser.source === 'mixed' ? 'Partly rule-based' : 'Rule-based'}
               </Badge>
             )}
           </div>
