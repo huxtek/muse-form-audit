@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Bot, Scan, Download, ExternalLink, AlertTriangle, CheckCircle, ChevronRight, Clock, Loader2, Zap, Globe, FileText, FlaskConical, Sparkles, Eye } from "lucide-react";
+import { Bot, Scan, AlertTriangle, CheckCircle, ChevronRight, Clock, Loader2, Zap, Globe, FileText, FlaskConical, Sparkles, Eye } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useDevMode } from "@/contexts/DevModeContext";
@@ -1505,19 +1505,15 @@ export const AIScanner = () => {
                   </div>
                 )}
 
-                {/* Action Buttons */}
-                <div className="flex gap-2 justify-center">
-                  {(currentJob.status === 'completed' || currentJob.status === 'completed_with_errors') && currentJob.results && (
-                    <Button onClick={downloadReport} variant="outline">
-                      <Download className="h-4 w-4 mr-2" />
-                      Download PDF Report
-                    </Button>
-                  )}
-                  <Button onClick={resetScan} variant="outline">
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    New Scan
-                  </Button>
-                </div>
+                {/*
+                  No action buttons here. This card only renders while the
+                  scan is queued or running, so the only thing a button could
+                  offer mid-scan is abandoning the scan just started -- and
+                  "New Scan" does not even cancel it, it navigates away and
+                  leaves the crawler running. Every finished state, failures
+                  included, gets ReportActionBar above with its own new-scan
+                  and download actions.
+                */}
               </CardContent>
             </Card>
           )}

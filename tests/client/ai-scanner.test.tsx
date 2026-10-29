@@ -191,6 +191,56 @@ describe('AIScanner polling', () => {
     expect(getReportMock).toHaveBeenCalledTimes(1);
   });
 
+  /**
+   * The progress card used to carry a "New Scan" button, and since the card
+   * only renders while a scan is queued or running, that button was reachable
+   * at exactly one moment: mid-scan, where its only effect is to abandon the
+   * scan just started. It did not even cancel the job -- it navigates to `/`
+   * and leaves the crawler running.
+   *
+   * Removing it is only safe while every finished state still offers a way
+   * out, so both halves are asserted here.
+   */
+  it('offers no action inside the progress card while a scan is running', async () => {
+    getReportMock.mockResolvedValue(jobRecord({ status: 'running', progress: 45 }));
+
+    await submitScan();
+
+    expect(screen.getByText('RUNNING')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /new scan/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /download/i })).not.toBeInTheDocument();
+  });
+
+  it('still offers a way out when the scan has failed', async () => {
+    // A failure is the state that most needs an exit, and the pinned report
+    // bar renders for it because 'failed' is a terminal status.
+    getReportMock.mockResolvedValue(
+      jobRecord({ status: 'failed', error: 'Browser service unavailable' })
+    );
+
+    await submitScan();
+
+    expect(screen.getByRole('button', { name: /scan another form/i })).toBeInTheDocument();
+  });
+
+  it('offers a rescan once the scan has completed', async () => {
+    getReportMock.mockResolvedValue(jobRecord({ status: 'completed', progress: 100 }));
+
+    await submitScan();
+
+    expect(screen.getByRole('button', { name: /scan another form/i })).toBeInTheDocument();
+  });
+
+  it('offers the download only once there are results to download', async () => {
+    // A completed job with nothing in `results` has no report to export, and
+    // a button that produces an empty PDF is worse than no button.
+    getReportMock.mockResolvedValue(jobRecord({ status: 'completed', progress: 100 }));
+
+    await submitScan();
+
+    expect(screen.queryByRole('button', { name: /download pdf/i })).not.toBeInTheDocument();
+  });
+
   it('stops polling after the job transitions from running to completed', async () => {
     getReportMock
       .mockResolvedValueOnce(jobRecord({ status: 'running' }))
