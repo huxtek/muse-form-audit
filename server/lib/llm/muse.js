@@ -17,8 +17,45 @@
  *     results are fed back as `function_call_output` input items.
  */
 
+import { readEnvValue } from './envValue.js';
+
 export const MUSE_ENDPOINT = 'https://api.meta.ai/v1/responses';
+
+/**
+ * Statuses worth trying again.
+ *
+ * 404 is in here, which looks wrong: "not found" is normally permanent. It
+ * is not, in practice. Measured on the deployment, three of six model calls
+ * came back `404 The requested model was not found.` while the other three
+ * succeeded, with the same key, the same model string and the same request
+ * shape -- and the same requests succeeded 12 times out of 12 from a
+ * developer machine. The model id stored on the host was read back directly
+ * and is exactly "muse-wonder-1.0", so nothing was malformed. The most
+ * likely reading is that some backends behind the API do not serve the
+ * model and the error reports that honestly, per request.
+ *
+ * 401 and 403 are deliberately absent: a rejected credential will be
+ * rejected again, and retrying only delays a clear failure. 400 likewise --
+ * a malformed request stays malformed.
+ */
+const RETRYABLE_STATUSES = new Set([404, 408, 409, 425, 429, 500, 502, 503, 504]);
+
+const RETRYABLE = Symbol('retryable');
+
+const asRetryable = (error) => {
+  error[RETRYABLE] = true;
+
+  return error;
+};
+
+const isRetryable = (error) => Boolean(error?.[RETRYABLE]);
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export const MUSE_DEFAULT_MODEL = 'muse-wonder-1.0';
+
+// NOTE: this default is also what a misconfigured MUSE_MODEL falls back to,
+// which is why the startup banner cannot be used to tell whether the
+// variable was read at all -- both paths print the same string.
 
 /**
  * Chat Completions content part -> Muse content part.
@@ -220,11 +257,21 @@ function redactKey(text, key) {
 }
 
 export function createMuseProvider({
-  apiKey = process.env.MODEL_API_KEY,
-  model = process.env.MUSE_MODEL || MUSE_DEFAULT_MODEL,
-  endpoint = MUSE_ENDPOINT,
-  reasoningEffort = process.env.MUSE_REASONING_EFFORT || 'low',
-  timeoutMs = Number(process.env.MODEL_TIMEOUT_MS || 120000)
+  // Every one of these goes into an HTTP request, and every one arrives from
+  // a dashboard or a clipboard. readEnvValue trims and unquotes, because a
+  // trailing newline on MUSE_MODEL cost a deployment: it is invisible in a
+  // log, and the API answers "404 The requested model was not found", which
+  // points at the model id rather than at the whitespace around it.
+  apiKey = readEnvValue('MODEL_API_KEY'),
+  model = readEnvValue('MUSE_MODEL', MUSE_DEFAULT_MODEL),
+  endpoint = readEnvValue('MUSE_ENDPOINT', MUSE_ENDPOINT),
+  reasoningEffort = readEnvValue('MUSE_REASONING_EFFORT', 'low'),
+  timeoutMs = Number(readEnvValue('MODEL_TIMEOUT_MS', '120000')),
+  // Three attempts against a measured 50% per-call failure rate leaves
+  // roughly one scan in eight still falling back, from one in two.
+  maxAttempts = Number(readEnvValue('MUSE_MAX_ATTEMPTS', '3')),
+  retryDelayMs = Number(readEnvValue('MUSE_RETRY_DELAY_MS', '600')),
+  logger = console
 } = {}) {
   return {
     name: 'muse',
@@ -252,45 +299,78 @@ export function createMuseProvider({
         model
       });
 
-      let response;
-      try {
-        response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(body),
-          signal: AbortSignal.timeout(timeoutMs)
-        });
-      } catch (error) {
-        throw new Error(`Muse request failed: ${redactKey(error.message, apiKey)}`);
-      }
+      let lastError;
 
-      const raw = await response.text();
-
-      if (!response.ok) {
-        let detail = raw;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         try {
-          detail = JSON.parse(raw)?.error?.message ?? raw;
-        } catch {
-          /* keep the raw body */
+          return await attemptCompletion(body);
+        } catch (error) {
+          lastError = error;
+
+          if (!isRetryable(error) || attempt === maxAttempts) {
+            throw error;
+          }
+
+          logger?.warn?.(
+            `   ↻ ${error.message} - retrying (${attempt}/${maxAttempts - 1})`
+          );
+
+          await delay(retryDelayMs * attempt);
         }
-        throw new Error(`Muse API error ${response.status}: ${redactKey(detail, apiKey)}`.trim());
       }
 
-      let payload;
-      try {
-        payload = JSON.parse(raw);
-      } catch {
-        throw new Error('Muse returned a response that was not valid JSON.');
-      }
-
-      if (payload.error) {
-        throw new Error(`Muse API error: ${redactKey(payload.error.message ?? 'unknown', apiKey)}`);
-      }
-
-      return fromMuseResponse(payload);
+      throw lastError;
     }
   };
+
+  async function attemptCompletion(body) {
+    let response;
+
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+    } catch (error) {
+      throw asRetryable(
+        new Error(`Muse request failed: ${redactKey(error.message, apiKey)}`)
+      );
+    }
+
+    const raw = await response.text();
+
+    if (!response.ok) {
+      let detail = raw;
+      try {
+        detail = JSON.parse(raw)?.error?.message ?? raw;
+      } catch {
+        /* keep the raw body */
+      }
+
+      const failure = new Error(
+        `Muse API error ${response.status}: ${redactKey(detail, apiKey)}`.trim()
+      );
+      failure.status = response.status;
+
+      throw RETRYABLE_STATUSES.has(response.status) ? asRetryable(failure) : failure;
+    }
+
+    let payload;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      throw new Error('Muse returned a response that was not valid JSON.');
+    }
+
+    if (payload.error) {
+      throw new Error(`Muse API error: ${redactKey(payload.error.message ?? 'unknown', apiKey)}`);
+    }
+
+    return fromMuseResponse(payload);
+  }
 }
