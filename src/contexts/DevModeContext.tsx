@@ -29,14 +29,14 @@ export const DevModeProvider: React.FC<DevModeProviderProps> = ({ children }) =>
     if (!isDevEnvironment) return false; // Always false in production
     
     // In development, check localStorage or default to true
-    const saved = localStorage.getItem('muse-form-audit-dev-mode');
+    const saved = localStorage.getItem('huxtek-dev-mode');
     return saved !== null ? JSON.parse(saved) : true;
   });
 
   // Save dev mode state to localStorage
   useEffect(() => {
     if (isDevEnvironment) {
-      localStorage.setItem('muse-form-audit-dev-mode', JSON.stringify(isDevMode));
+      localStorage.setItem('huxtek-dev-mode', JSON.stringify(isDevMode));
     }
   }, [isDevMode, isDevEnvironment]);
 

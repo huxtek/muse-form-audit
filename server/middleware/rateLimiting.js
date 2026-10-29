@@ -1,7 +1,7 @@
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 /**
- * Rate limiting for Muse Form Audit.
+ * Rate limiting for HuxTek.
  *
  * The server is unauthenticated, so rate limits are the only thing standing
  * between a stranger and the operator's LLM API bill. They are enabled in every

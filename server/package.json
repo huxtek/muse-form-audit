@@ -1,9 +1,9 @@
 {
-  "name": "muse-form-audit-server",
+  "name": "huxtek-server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Muse Form Audit scanner API server",
+  "description": "HuxTek scanner API server",
   "main": "server.js",
   "license": "MIT",
   "scripts": {

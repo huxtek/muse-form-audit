@@ -156,7 +156,7 @@ jobSweep.unref();
 app.get('/health', publicLimiter, (req, res) => {
   res.json({
     status: 'healthy',
-    service: 'muse-form-audit-server',
+    service: 'huxtek-server',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
     uptime: process.uptime(),
@@ -862,7 +862,7 @@ app.use('*', (req, res) => {
 // =============================================================================
 
 server.listen(PORT, HOST, () => {
-  console.log('Muse Form Audit server ready');
+  console.log('HuxTek server ready');
   console.log(`  listening on     http://${HOST}:${PORT}`);
   console.log(`  environment      ${process.env.NODE_ENV || 'development'}`);
   console.log(`  health check     http://${HOST}:${PORT}/health`);

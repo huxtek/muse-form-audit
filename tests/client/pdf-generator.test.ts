@@ -162,7 +162,7 @@ describe('PDFGenerator report framing', () => {
   it('stamps the job ID into the footer of every page', () => {
     new PDFGenerator().generateReport(reportWith(), 'job-abc');
 
-    expect(renderedText()).toContain('Muse Form Audit Report - Job ID: job-abc');
+    expect(renderedText()).toContain('HuxTek Report - Job ID: job-abc');
   });
 
   it('includes the target URL and the AI summary', () => {

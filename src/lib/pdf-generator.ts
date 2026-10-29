@@ -525,7 +525,7 @@ export class PDFGenerator {
       this.doc.setPage(i);
       this.doc.setFontSize(8);
       this.doc.setTextColor(150);
-      this.doc.text(this.cleanText(`Muse Form Audit Report - Job ID: ${jobId}`), this.margin, 290);
+      this.doc.text(this.cleanText(`HuxTek Report - Job ID: ${jobId}`), this.margin, 290);
       this.doc.text(this.cleanText(`Page ${i} of ${pageCount}`), 160, 290);
     }
   }

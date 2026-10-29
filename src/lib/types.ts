@@ -1,4 +1,4 @@
-// Types for Muse Form Audit application
+// Types for HuxTek application
 // Only keeping types that are used by the AI Scanner functionality
 
 import type { ScanResults } from '@/lib/scan-types';

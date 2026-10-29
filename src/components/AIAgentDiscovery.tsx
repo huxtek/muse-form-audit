@@ -9,7 +9,7 @@ import {
 } from '@/lib/ai-agent-support';
 
 const PAGE_INSTRUCTIONS: Record<string, string> = {
-  home: 'This is the main Muse Form Audit interface. Enter a website URL in the input field to analyze forms for AI agent compatibility. Results include accessibility scores, form structure analysis, and optimization recommendations.'
+  home: 'This is the main HuxTek interface. Enter a website URL in the input field to analyze forms for AI agent compatibility. Results include accessibility scores, form structure analysis, and optimization recommendations.'
 };
 
 interface AIAgentDiscoveryProps {

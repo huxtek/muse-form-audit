@@ -1,5 +1,5 @@
 /**
- * Environment configuration for Muse Form Audit
+ * Environment configuration for HuxTek
  *
  * The API base URL is read from VITE_API_BASE_URL and falls back to the local
  * scanner backend. Nothing secret belongs in here: every VITE_* variable is

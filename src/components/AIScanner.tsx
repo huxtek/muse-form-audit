@@ -828,13 +828,13 @@ export const AIScanner = () => {
         pdfGenerator.generateReport(getNormalizedResults(currentJob), currentJob.id);
         
         const timestamp = new Date().toISOString().split('T')[0];
-        const filename = `muse-form-audit-${timestamp}-${currentJob.id.substring(0, 8)}.pdf`;
+        const filename = `huxtek-${timestamp}-${currentJob.id.substring(0, 8)}.pdf`;
         
         pdfGenerator.download(filename);
         
         toast({
           title: "PDF Report Downloaded",
-          description: "Your Muse Form Audit report has been saved as a PDF",
+          description: "Your HuxTek report has been saved as a PDF",
         });
       } catch (error) {
         console.error('PDF generation failed:', error);
@@ -976,7 +976,7 @@ export const AIScanner = () => {
                           itself. Visually hidden because the placeholder and
                           the card title already carry it on screen. Wording
                           matches what screen readers already announced. */}
-                      <label htmlFor="muse-form-audit-url-input" className="sr-only">
+                      <label htmlFor="huxtek-url-input" className="sr-only">
                         Website URL for AI form analysis
                       </label>
 
@@ -1006,7 +1006,7 @@ export const AIScanner = () => {
                         // Only ever true when it IS invalid, which is the
                         // one of the two that should be conditional.
                         aria-invalid={urlError ? true : undefined}
-                        id="muse-form-audit-url-input"
+                        id="huxtek-url-input"
                         // Named exactly as /api/scan reads it, so a native
                         // submit genuinely works and the markup and the API
                         // speak one vocabulary.
@@ -1056,7 +1056,7 @@ export const AIScanner = () => {
                         data-ai-action="analyze-website-forms"
                         data-ai-description="Start AI-powered analysis of website forms for compatibility and accessibility"
                         aria-label="Start AI form analysis"
-                        id="muse-form-audit-scan-button"
+                        id="huxtek-scan-button"
                         type="submit"
                         // Acknowledges the click immediately. Without this
                         // the label sat unchanged for the length of the

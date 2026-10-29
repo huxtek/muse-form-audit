@@ -403,7 +403,7 @@ describe('AIScanner landing page', () => {
     const heading = screen.getByRole('heading', { level: 1 });
     expect(heading).toHaveTextContent(/can an ai agent fill in your form/i);
     // The name belongs in the header, where it already is.
-    expect(heading).not.toHaveTextContent(/muse form audit/i);
+    expect(heading).not.toHaveTextContent(/huxtek/i);
   });
 
   it('shows an example report instead of only describing one', () => {

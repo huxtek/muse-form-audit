@@ -6,7 +6,7 @@
  * origin the app is actually served from, so nothing is tied to a fixed domain.
  */
 
-const APP_NAME = 'Muse Form Audit';
+const APP_NAME = 'HuxTek';
 
 const getOrigin = (): string =>
   typeof window === 'undefined' ? '' : window.location.origin;

@@ -26,7 +26,7 @@ const Header = () => {
       <div className="max-w-7xl mx-auto flex items-center justify-between h-full">
         <Link to="/" className="flex items-center space-x-2">
           <Bot className="w-8 h-8 text-primary" />
-          <span className="font-bold text-xl hidden sm:inline-block">Muse Form Audit</span>
+          <span className="font-bold text-xl hidden sm:inline-block">HuxTek</span>
         </Link>
 
         <div className="flex items-center space-x-4">

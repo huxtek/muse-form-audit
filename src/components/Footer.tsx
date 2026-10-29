@@ -12,7 +12,7 @@ const Footer = () => {
           <div className="max-w-sm">
             <Link to="/" className="flex items-center space-x-2 mb-4 hover:opacity-80 transition-opacity">
               <Bot className="w-8 h-8 text-primary" />
-              <span className="font-bold text-xl">Muse Form Audit</span>
+              <span className="font-bold text-xl">HuxTek</span>
             </Link>
             <p className="text-muted-foreground">
               Making web forms compatible with AI agents through comprehensive analysis and
@@ -31,7 +31,7 @@ const Footer = () => {
 
         <div className="border-t border-border/50 mt-10 pt-6">
           <p className="text-sm text-muted-foreground">
-            &copy; {currentYear} huxtek. Released under the MIT license.
+            &copy; {currentYear} HuxTek. Released under the MIT license.
           </p>
         </div>
       </div>

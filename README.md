@@ -1,9 +1,9 @@
-# Muse Form Audit
+# HuxTek
 
 Point it at a URL and it tells you whether an AI agent could actually fill out
 the forms on that page.
 
-Muse Form Audit crawls a page (or a whole site), extracts every form it can
+HuxTek crawls a page (or a whole site), extracts every form it can
 find, and runs each one through an LLM-driven analysis that scores it on
 structure, field labelling, input hints, data types, validation, submission
 behaviour, and accessibility. The output is a per-form report with concrete
@@ -71,8 +71,8 @@ Optional, and only needed for real (non-mock) scans:
 ## Install
 
 ```bash
-git clone <your-fork-url> muse-form-audit
-cd muse-form-audit
+git clone <your-fork-url> huxtek
+cd huxtek
 
 # frontend
 npm install
@@ -139,7 +139,7 @@ the per-form report, and the PDF export all work.
 How it is wired:
 
 - It is a **client-side** toggle. `DevModeContext` stores it in
-  `localStorage` under the key `muse-form-audit-dev-mode`, and it defaults to
+  `localStorage` under the key `huxtek-dev-mode`, and it defaults to
   **on** in a dev build (`npm run dev`).
 - The header **Dev Mode** toggle flips it. The value is sent as `devMode` in
   the `POST /api/scan` body, and the backend answers from
