@@ -174,6 +174,13 @@ export async function analyzeFormWithModel({
   vision = VISION_ENABLED,
   maxTokens = Number(process.env.MODEL_ANALYSIS_MAX_TOKENS || 4000),
   htmlCharLimit = DEFAULT_HTML_CHAR_LIMIT,
+  /**
+   * Notified when the model refuses and the provider is still trying. The
+   * refusals come in patches that clear within a minute, so the scan waits
+   * them out rather than degrading -- and a scan that goes quiet for a
+   * minute needs to say why or it reads as stalled.
+   */
+  onRetry = null,
   logger = console
 }) {
   const fallback = () => {
@@ -223,7 +230,8 @@ export async function analyzeFormWithModel({
         { role: 'user', content }
       ],
       maxTokens,
-      responseFormat: 'json_object'
+      responseFormat: 'json_object',
+      onRetry
     });
 
     const text = completion?.choices?.[0]?.message?.content;

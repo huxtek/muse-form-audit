@@ -347,8 +347,25 @@ describe('createMuseProvider transport', () => {
   const KEY = 'LLM_fake_key_for_tests_0123456789abcdef';
   const ENDPOINT = 'https://example.invalid/responses';
 
+  /*
+   * One attempt per call, deliberately.
+   *
+   * This suite is about the shape of a request and the wording of an error.
+   * With the production retry settings a 504 or a refused connection is
+   * retried for a minute, so every error assertion here would wait out the
+   * budget -- and a loop still running when the test ended went on to call
+   * the *next* test's fetch stub. Retry behaviour has its own suite in
+   * museRetry.test.js.
+   */
   const provider = (overrides = {}) =>
-    createMuseProvider({ apiKey: KEY, endpoint: ENDPOINT, model: 'muse-test', ...overrides });
+    createMuseProvider({
+      apiKey: KEY,
+      endpoint: ENDPOINT,
+      model: 'muse-test',
+      maxAttempts: 1,
+      fallbackModels: [],
+      ...overrides
+    });
 
   const respond = (body, { ok = true, status = 200 } = {}) => {
     const fetchMock = vi.fn().mockResolvedValue({

@@ -2027,8 +2027,30 @@ Focus on AI agent needs: name attributes, field identification, form submission 
       heuristicAnalysis,
       behaviour,
       screenshot: capture?.buffer ?? null,
-      screenshotContentType: capture?.contentType ?? 'image/png'
+      screenshotContentType: capture?.contentType ?? 'image/png',
+      // The model refuses in patches that clear within a minute, so the
+      // provider waits them out instead of degrading to the rule-based
+      // score. That wait is silent otherwise: the progress bar holds at the
+      // same percentage for up to a minute and the scan reads as hung.
+      onRetry: ({ elapsedMs, budgetMs }) => {
+        this.updateProgress({
+          currentStep: this.describeModelWait({ elapsedMs, budgetMs })
+        });
+      }
     });
+  }
+
+  /**
+   * Wording for the wait while the model is refusing.
+   *
+   * Says what is happening and that it is still working, without a count:
+   * "attempt 14" sounds like something is badly wrong, when fourteen
+   * attempts two seconds apart is the normal shape of a patch clearing.
+   */
+  describeModelWait({ elapsedMs, budgetMs }) {
+    const remaining = Math.max(0, Math.ceil((budgetMs - elapsedMs) / 1000));
+
+    return `Model is briefly unavailable - retrying for up to ${remaining}s...`;
   }
 
   async analyzeIndividualForm(formData) {
@@ -2319,9 +2341,15 @@ Focus on AI agent needs: name attributes, field identification, form submission 
       jobId: this.jobId
     };
     
-    // Log progress updates
+    // Several updates change only the wording and leave the percentage where
+    // it was. Printing "0%" for those made the log read as if the scan had
+    // restarted, so the percentage is omitted when the update has none.
     if (update.currentStep) {
-      console.log(`📈 Progress: ${update.progress || 0}% - ${update.currentStep}`);
+      const percent = Number.isFinite(Number(update.progress))
+        ? `${Math.round(Number(update.progress))}% - `
+        : '';
+
+      console.log(`📈 Progress: ${percent}${update.currentStep}`);
     }
     
     if (this.progressCallback) {

@@ -38,8 +38,13 @@ const provider = (overrides = {}) =>
     apiKey: 'test-key',
     model: 'muse-wonder-1.0',
     retryDelayMs: 0,
+    // Counts are driven by maxAttempts here, with the time budget set
+    // effectively infinite, so assertions are deterministic. Budget
+    // behaviour has its own tests below.
+    retryBudgetMs: 10 ** 9,
+    maxAttempts: 3,
     // No stand-ins unless a test asks for one, so the counts below measure
-    // retries of a single model rather than retries times the chain length.
+    // retries of a single model rather than retries across the chain.
     fallbackModels: [],
     logger: silent,
     ...overrides
@@ -71,13 +76,25 @@ describe('muse retry: transient failures', () => {
     expect(result.choices[0].message.content).toContain('80');
   });
 
-  it('makes five attempts by default, sized to the measured failure rate', async () => {
-    // About a quarter of calls are refused, independently, so five
-    // independent quarter-chances leave roughly one in a thousand unserved.
+  it('stops at the attempt ceiling', async () => {
     fetchMock.mockResolvedValue(fail(404, 'The requested model was not found.'));
 
-    await expect(ask(provider())).rejects.toThrow(/404/);
-    expect(fetchMock).toHaveBeenCalledTimes(5);
+    await expect(ask(provider({ maxAttempts: 4 }))).rejects.toThrow(/404/);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it('stops when the time budget is spent, not at a fixed count', async () => {
+    // The budget is what matters: refusals come in patches, and spacing is
+    // what gets through them. A delay that does not fit the remaining
+    // budget ends the attempt.
+    fetchMock.mockResolvedValue(fail(404));
+
+    await expect(
+      ask(provider({ retryBudgetMs: 100, retryDelayMs: 80, maxAttempts: 99 }))
+    ).rejects.toThrow(/404/);
+
+    // One attempt, then 80ms does not fit twice inside 100ms.
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(2);
   });
 
   it('retries a rate limit', async () => {
@@ -177,7 +194,10 @@ describe('muse retry: secrecy and reporting', () => {
     await ask(provider({ logger: { warn, log: () => {} } }));
 
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0][0]).toMatch(/retrying/i);
+    // The model is named: two groups of identical retry lines previously had
+    // to be told apart by counting them.
+    expect(warn.mock.calls[0][0]).toMatch(/muse-wonder-1\.0 refused/);
+    expect(warn.mock.calls[0][0]).toMatch(/attempt 1/);
   });
 
   it('does not log a retry when the first attempt works', async () => {
@@ -265,8 +285,9 @@ describe('muse model chain', () => {
       apiKey: 'test-key',
       model: 'muse-wonder-1.0',
       fallbackModels: ['muse-spark-1.3'],
-      maxAttempts: 2,
       retryDelayMs: 0,
+      retryBudgetMs: 10 ** 9,
+      maxAttempts: 4,
       logger: silent,
       ...overrides
     });
@@ -274,32 +295,44 @@ describe('muse model chain', () => {
   const bodyModels = () =>
     fetchMock.mock.calls.map(([, init]) => JSON.parse(init.body).model);
 
-  it('falls back to the stand-in once the preferred model is exhausted', async () => {
-    fetchMock
-      .mockResolvedValueOnce(fail(404, 'The requested model was not found.'))
-      .mockResolvedValueOnce(fail(404, 'The requested model was not found.'))
-      .mockResolvedValueOnce(okFrom('muse-spark-1.3'));
+  it('alternates models across attempts rather than exhausting one first', async () => {
+    // Both models carry the same intermittent refusal -- 30% on one and 50%
+    // on the other within minutes -- so spending the whole budget on a model
+    // that is in a bad patch wastes it.
+    fetchMock.mockResolvedValue(fail(404, 'The requested model was not found.'));
 
-    const result = await ask(chained());
+    await expect(ask(chained())).rejects.toThrow(/404/);
 
-    expect(bodyModels()).toEqual(['muse-wonder-1.0', 'muse-wonder-1.0', 'muse-spark-1.3']);
-    expect(result.choices[0].message.content).toContain('70');
+    expect(bodyModels()).toEqual([
+      'muse-wonder-1.0',
+      'muse-spark-1.3',
+      'muse-wonder-1.0',
+      'muse-spark-1.3'
+    ]);
   });
 
-  it('reports which model actually answered', async () => {
-    // Without this the report would name the model that was requested, and
-    // claim work the stand-in did.
+  it('takes the stand-in on the second attempt when the first is refused', async () => {
     fetchMock
-      .mockResolvedValueOnce(fail(404))
       .mockResolvedValueOnce(fail(404))
       .mockResolvedValueOnce(okFrom('muse-spark-1.3'));
 
     const result = await ask(chained());
 
+    expect(bodyModels()).toEqual(['muse-wonder-1.0', 'muse-spark-1.3']);
     expect(result.model).toBe('muse-spark-1.3');
   });
 
-  it('names the preferred model when it answers', async () => {
+  it('reports which model actually answered', async () => {
+    // Without this the report would name the model that was requested and
+    // claim work the stand-in did.
+    fetchMock
+      .mockResolvedValueOnce(fail(404))
+      .mockResolvedValueOnce(okFrom('muse-spark-1.3'));
+
+    expect((await ask(chained())).model).toBe('muse-spark-1.3');
+  });
+
+  it('names the preferred model when it answers first', async () => {
     fetchMock.mockResolvedValueOnce(okFrom('muse-wonder-1.0'));
 
     const result = await ask(chained());
@@ -316,23 +349,22 @@ describe('muse model chain', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('says in the log that a stand-in was used', async () => {
-    const warn = vi.fn();
+  it('records which attempt and how long it took when a retry succeeds', async () => {
+    const log = vi.fn();
     fetchMock
-      .mockResolvedValueOnce(fail(404))
       .mockResolvedValueOnce(fail(404))
       .mockResolvedValueOnce(okFrom('muse-spark-1.3'));
 
-    await ask(chained({ logger: { warn, log: () => {} } }));
+    await ask(chained({ logger: { warn: () => {}, log } }));
 
-    expect(warn.mock.calls.map(([l]) => l).join('\n')).toMatch(
-      /muse-wonder-1\.0 unavailable.*scored with muse-spark-1\.3 instead/
+    expect(log.mock.calls.map(([l]) => l).join('\n')).toMatch(
+      /muse-spark-1\.3 answered on attempt 2/
     );
   });
 
   it('does not work through the chain for a rejected credential', async () => {
-    // A bad key is bad for every model. Trying each one only makes the same
-    // failure arrive later.
+    // A bad key is bad for every model and every retry. Trying each one only
+    // makes the same failure arrive a minute later.
     fetchMock.mockResolvedValue(fail(401, 'Unauthorized'));
 
     await expect(ask(chained())).rejects.toThrow(/401/);
@@ -346,24 +378,50 @@ describe('muse model chain', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('surfaces the last error when every model is exhausted', async () => {
-    fetchMock.mockResolvedValue(fail(404, 'The requested model was not found.'));
-
-    await expect(ask(chained())).rejects.toThrow(/404/);
-    // Two attempts each, across two models.
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-    expect(bodyModels()).toEqual([
-      'muse-wonder-1.0',
-      'muse-wonder-1.0',
-      'muse-spark-1.3',
-      'muse-spark-1.3'
-    ]);
-  });
-
-  it('runs with no chain at all when none is configured', async () => {
+  it('runs on one model when no stand-in is configured', async () => {
     fetchMock.mockResolvedValue(fail(404));
 
-    await expect(ask(chained({ fallbackModels: [] }))).rejects.toThrow(/404/);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await expect(ask(chained({ fallbackModels: [], maxAttempts: 2 }))).rejects.toThrow(/404/);
+    expect(bodyModels()).toEqual(['muse-wonder-1.0', 'muse-wonder-1.0']);
+  });
+});
+
+describe('muse retry reporting to the caller', () => {
+  it('calls onRetry for each refusal so the UI can explain the wait', async () => {
+    // A scan that goes quiet for a minute looks stalled. This is what lets
+    // the job say "the model is briefly unavailable, still trying".
+    const onRetry = vi.fn();
+    fetchMock
+      .mockResolvedValueOnce(fail(404, 'The requested model was not found.'))
+      .mockResolvedValueOnce(ok());
+
+    await provider().createCompletion({
+      messages: [{ role: 'user', content: 'hi' }],
+      maxTokens: 100,
+      onRetry
+    });
+
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onRetry.mock.calls[0][0]).toMatchObject({ attempt: 1, model: 'muse-wonder-1.0' });
+    expect(onRetry.mock.calls[0][0].budgetMs).toBeGreaterThan(0);
+  });
+
+  it('does not call onRetry when the first attempt works', async () => {
+    const onRetry = vi.fn();
+    fetchMock.mockResolvedValue(ok());
+
+    await provider().createCompletion({
+      messages: [{ role: 'user', content: 'hi' }],
+      maxTokens: 100,
+      onRetry
+    });
+
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
+  it('runs without an onRetry callback', async () => {
+    fetchMock.mockResolvedValueOnce(fail(404)).mockResolvedValueOnce(ok());
+
+    await expect(ask(provider())).resolves.toBeDefined();
   });
 });

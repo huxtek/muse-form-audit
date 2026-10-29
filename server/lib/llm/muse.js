@@ -268,34 +268,41 @@ export function createMuseProvider({
   reasoningEffort = readEnvValue('MUSE_REASONING_EFFORT', 'low'),
   timeoutMs = Number(readEnvValue('MODEL_TIMEOUT_MS', '120000')),
   /**
-   * Attempts per model.
+   * How long to keep trying before giving up on the model entirely.
    *
-   * Measured: `model_not_found` arrives on about a quarter of calls, and the
-   * failures are independent -- 20 sequential identical requests from one
-   * client gave 5 failures interleaved with 15 successes, longest failure
-   * run 2. So each retry is an independent quarter-chance, and five attempts
-   * leave roughly one call in a thousand unserved.
+   * Sized by measurement, and the measurement is about spacing rather than
+   * volume. `model_not_found` arrives in bad patches whose rate swings
+   * between 0% and 50% over minutes, on every model, not just the preview
+   * one. Crammed attempts share a patch: 20 rapid-fire requests gave 6
+   * refusals with a run of 3, while 24 attempts spaced a second apart gave
+   * zero across both models.
    *
-   * Retrying is close to free here because the failure is fast: refusals
-   * came back in 106ms, 125ms and 309ms, against successes of seconds and
-   * whole analyses of 8 to 40 seconds. The user cannot perceive it.
+   * So the budget is a minute and the gap is seconds. A scan during a bad
+   * patch takes longer; the alternative is a fast report scored by rules,
+   * which finds no field-level issues at all and leaves the annotated
+   * screenshot empty.
+   *
+   * An earlier version made five attempts 200ms apart, which is exactly the
+   * wrong shape: a real scan burned all ten attempts across two models in
+   * six seconds and still fell back.
    */
-  maxAttempts = Number(readEnvValue('MUSE_MAX_ATTEMPTS', '5')),
-  /**
-   * 200ms, scaled by attempt. Short on purpose: the failures are
-   * independent rather than congestion, so there is nothing to back off
-   * from -- the delay only avoids hammering. The previous 600ms was sized
-   * for a theory about multi-minute outages that the data disproved.
-   */
-  retryDelayMs = Number(readEnvValue('MUSE_RETRY_DELAY_MS', '200')),
+  retryBudgetMs = Number(readEnvValue('MUSE_RETRY_BUDGET_MS', '60000')),
+  /** Gap between attempts. Seconds, because spacing is what works. */
+  retryDelayMs = Number(readEnvValue('MUSE_RETRY_DELAY_MS', '2000')),
+  /** Hard ceiling, so a tiny delay cannot turn the budget into a hot loop. */
+  maxAttempts = Number(readEnvValue('MUSE_MAX_ATTEMPTS', '40')),
   /**
    * Stand-ins, tried in order once the preferred model is exhausted.
    *
-   * muse-spark-1.3 is generally available rather than preview, takes the
-   * same request on the same endpoint, and answered every call in every
-   * observation including vision. A report it produces is still a real
-   * audit -- findings attributed to controls, a written narrative -- which
-   * the rule-based fallback is not.
+   * muse-spark-1.3 takes the same request on the same endpoint, so a report
+   * it produces is still a real audit -- findings attributed to controls, a
+   * written narrative -- which the rule-based fallback is not.
+   *
+   * It is not a safe harbour, though. Spark carries the same intermittent
+   * refusal: 4 of 8 calls were refused in one window and 0 of 20 in
+   * another, so it is a second independent chance rather than a reliable
+   * stand-in. That is why attempts alternate across the chain instead of
+   * exhausting the preferred model first.
    */
   fallbackModels = (readEnvValue('MUSE_FALLBACK_MODELS', 'muse-spark-1.3') ?? '')
     .split(',')
@@ -311,7 +318,16 @@ export function createMuseProvider({
     isConfigured: () => Boolean(apiKey),
     requiredEnvVar: 'MODEL_API_KEY',
 
-    async createCompletion({ messages, tools, toolChoice, maxTokens, responseFormat }) {
+    async createCompletion({
+      messages,
+      tools,
+      toolChoice,
+      maxTokens,
+      responseFormat,
+      // Called on each refusal so a caller can tell the user why the scan is
+      // taking longer, instead of leaving it looking stalled.
+      onRetry
+    }) {
       if (!apiKey) {
         throw new Error(
           'Muse is selected but MODEL_API_KEY is not set. Add it to .env, switch the model to OpenAI, ' +
@@ -319,12 +335,24 @@ export function createMuseProvider({
         );
       }
 
-      // Preferred model first, then any stand-ins. Each gets the full
-      // attempt budget before the next is tried.
+      /*
+       * Attempts alternate across the chain rather than exhausting one model
+       * before trying the next.
+       *
+       * Both models carry the same intermittent refusal -- measured at 30%
+       * on one and 50% on the other within minutes of each other -- so
+       * spending the whole budget on a model that is in a bad patch wastes
+       * it. Alternating gives every attempt a fresh chance on either.
+       */
       const chain = [model, ...fallbackModels].filter(Boolean);
+      const startedAt = Date.now();
       let lastError;
+      let attempt = 0;
 
-      for (const candidate of chain) {
+      while (true) {
+        attempt += 1;
+
+        const candidate = chain[(attempt - 1) % chain.length];
         const body = toMuseRequest({
           messages,
           tools,
@@ -335,39 +363,55 @@ export function createMuseProvider({
           model: candidate
         });
 
-        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-          try {
-            const completion = await attemptCompletion(body, candidate);
+        try {
+          const completion = await attemptCompletion(body, candidate);
 
-            if (candidate !== chain[0]) {
-              logger?.warn?.(
-                `   ⤵ ${chain[0]} unavailable after ${maxAttempts} attempts - scored with ${candidate} instead`
-              );
-            }
-
-            return completion;
-          } catch (error) {
-            lastError = error;
-
-            // A rejected credential or a malformed request will be rejected
-            // by every model in the chain. Fail now rather than working
-            // through the list to reach the same answer three times slower.
-            if (!isRetryable(error)) {
-              throw error;
-            }
-
-            if (attempt < maxAttempts) {
-              logger?.warn?.(
-                `   ↻ ${error.message} - retrying (${attempt}/${maxAttempts - 1})`
-              );
-
-              await delay(retryDelayMs * attempt);
-            }
+          if (attempt > 1) {
+            logger?.log?.(
+              `   ✓ ${candidate} answered on attempt ${attempt} after ${Math.round((Date.now() - startedAt) / 1000)}s`
+            );
           }
+
+          return completion;
+        } catch (error) {
+          lastError = error;
+
+          // A rejected credential or a malformed request will be rejected by
+          // every model and by every retry. Fail now rather than spending a
+          // minute reaching the same answer.
+          if (!isRetryable(error)) {
+            throw error;
+          }
+
+          const elapsed = Date.now() - startedAt;
+          const exhausted = elapsed + retryDelayMs > retryBudgetMs || attempt >= maxAttempts;
+
+          if (exhausted) {
+            logger?.warn?.(
+              `   ⚠ gave up after ${attempt} attempts over ${Math.round(elapsed / 1000)}s`
+            );
+
+            throw error;
+          }
+
+          // Named, because a log that does not say which model was refused
+          // cannot be read afterwards -- two groups of identical retry lines
+          // had to be told apart by counting them.
+          logger?.warn?.(
+            `   ↻ ${candidate} refused (${error.errorCode ?? error.status ?? 'error'}, request ${error.requestId ?? 'unknown'}) - attempt ${attempt}, ${Math.round((retryBudgetMs - elapsed) / 1000)}s budget left`
+          );
+
+          onRetry?.({
+            attempt,
+            model: candidate,
+            elapsedMs: elapsed,
+            budgetMs: retryBudgetMs,
+            requestId: error.requestId ?? null
+          });
+
+          await delay(retryDelayMs);
         }
       }
-
-      throw lastError;
     }
   };
 
