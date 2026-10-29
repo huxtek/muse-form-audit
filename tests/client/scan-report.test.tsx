@@ -662,6 +662,35 @@ describe('report finding totals agree', () => {
     expect(screen.getByRole('button', { name: /low 3/i })).toBeInTheDocument();
   });
 
+  it('still shows the row when one severity is zero but others are not', async () => {
+    // The shape a real scan of httpbin produced: 11 findings, 10 low and
+    // 1 medium, no high at all. The row must still appear -- collapsing to
+    // "No issues found" here would claim a clean bill for a form with
+    // eleven things wrong with it.
+    await renderReport({
+      forms: [
+        form({
+          accessibility: {
+            score: 75,
+            fieldIssues: [
+              ...Array.from({ length: 10 }, (_, index) => ({
+                field: `f${index}`,
+                severity: 'low' as const,
+                issue: `low ${index}`
+              })),
+              { field: 'g', severity: 'medium' as const, issue: 'one medium' }
+            ]
+          }
+        })
+      ]
+    });
+
+    expect(stripBadge('0 high')).toBeInTheDocument();
+    expect(stripBadge('1 medium')).toBeInTheDocument();
+    expect(stripBadge('10 low')).toBeInTheDocument();
+    expect(screen.queryByText(/No issues found/)).not.toBeInTheDocument();
+  });
+
   it('calls a clean report clean without claiming only fields were checked', async () => {
     await renderReport({
       forms: [form({ accessibility: { score: 96, fieldIssues: [], formFindings: [] } })]

@@ -54,7 +54,8 @@ moving parts, and the build is reproducible on a machine with no Docker.
    curl https://huxtek-api.onrender.com/health
    curl https://huxtek-api.onrender.com/api/config
    ```
-   `/api/config` should report `"realScansEnabled": false`.
+   `/api/config` should report `"realScansEnabled": true`, matching
+   `render.yaml`.
 
 ### 2. UI on Netlify
 
@@ -69,21 +70,19 @@ moving parts, and the build is reproducible on a machine with no Docker.
 value that gets compiled in is visible in the repo. Nothing secret may go
 there: Vite inlines every `VITE_` variable into the published JavaScript.
 
-## Turning real scans on for the demo
+## Real scans
 
-One setting, server-side:
+`ENABLE_REAL_SCANS` is `"true"` in `render.yaml`, so the deployment accepts
+real targets.
 
-```
-Render dashboard -> huxtek-api -> Environment -> ENABLE_REAL_SCANS = true -> Save
-```
+It lives in the file rather than the dashboard deliberately. A dashboard
+override of a blueprint-managed value can be reverted whenever Render next
+syncs the blueprint, so the durable home for a setting with a settled answer
+is the file. To switch scans off, change it to `"false"` and push; Render
+redeploys and the UI picks it up from `/api/config` on the next load, with no
+front-end rebuild.
 
-A rolling restart takes about 30 seconds. **No UI rebuild and no Netlify
-deploy.** The browser reads `/api/config` at runtime and the demo-mode notice
-disappears on next load.
-
-To turn it off again, set it back to `false`.
-
-Why it is built this way, and not as a `VITE_` flag:
+Why it is a server setting and not a `VITE_` flag:
 
 - `/api/scan` is public and callable directly, so hiding the control in the UI
   would not prevent a real scan. The API has to refuse it, and it does, with
@@ -97,11 +96,19 @@ nothing, so `/api/demo` works regardless.
 
 ## What is exposed, and what guards it
 
-The API is **unauthenticated**. Anyone who finds the URL can call it. With
-`ENABLE_REAL_SCANS=false` the only thing they can reach is the bundled sample,
-which costs nothing. With it on, they can ask the service to fetch arbitrary
-public URLs using a real browser, and that traffic is attributable to your
-Browserless account.
+The API is **unauthenticated**, and real scans are on. Anyone who reaches the
+URL can have the service fetch arbitrary public URLs using a real browser, and
+that traffic is attributable to the Browserless account behind it.
+
+Being unadvertised is not the same as being unreachable. Both hostnames appear
+in public certificate transparency logs, because every TLS certificate issued
+for them is published there and those logs are searchable. So the addresses are
+discoverable without anyone sharing them.
+
+What bounds the damage: the provider-side cap on the model account, which is
+the only hard stop, plus the rate limits below. Setting `ENABLE_REAL_SCANS` to
+`"false"` reduces the reachable surface to the bundled sample, which costs
+nothing.
 
 What stands in the way:
 

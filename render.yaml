@@ -44,18 +44,22 @@ services:
       - key: MODEL_API_KEY
         sync: false
 
-      # --- Real scans are off until the demo. ---
+      # --- Real scans. ---
       #
-      # Enforced by the API, not the UI: this endpoint is public and callable
-      # directly, so hiding the control would not prevent a scan. The browser
-      # reads /api/config at runtime and follows, which is what makes turning
-      # this on a restart rather than a UI rebuild -- Vite inlines its own
-      # variables at build time, so a VITE_ flag would mean redeploying
-      # Netlify to flip it.
+      # Enforced by the API, not the UI: this endpoint is reachable directly,
+      # so hiding the control in the browser would not prevent a scan. The UI
+      # reads /api/config at runtime and follows, so this can change without
+      # rebuilding the front end -- Vite inlines its own variables at build
+      # time, which would otherwise make flipping this a Netlify redeploy.
       #
-      # Demo day: set this to true in the Render dashboard. ~30s restart.
+      # Declared here rather than left to the dashboard because it is meant
+      # to stay on. A dashboard override of a blueprint-managed value can be
+      # reverted whenever Render next syncs this file, so the durable place
+      # for a setting with a settled answer is the file itself.
+      #
+      # To switch scans off again, change this to "false" and push.
       - key: ENABLE_REAL_SCANS
-        value: "false"
+        value: "true"
 
       # --- Which browser origins may call this API. ---
       - key: ALLOWED_ORIGINS
