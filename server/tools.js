@@ -71,21 +71,6 @@ export class CrawlerTools {
   }
 
   /**
-   * Clean up browser resources
-   */
-  async cleanup() {
-    if (this.browser) {
-      try {
-        await this.browser.disconnect(); // Use disconnect for remote browsers
-        console.log('✅ Disconnected from Browserless.io');
-      } catch (error) {
-        console.log('⚠️  Browser cleanup warning:', error.message);
-      }
-      this.browser = null;
-    }
-  }
-
-  /**
    * Initialize browser using Browserless.io cloud service
    */
   async initBrowser() {
@@ -129,12 +114,22 @@ export class CrawlerTools {
   }
 
   /**
-   * Clean up browser resources
+   * Releases the remote browser.
+   *
+   * `close()` rather than `disconnect()` on purpose: disconnecting leaves the
+   * Browserless session running until it times out on their side, holding a
+   * paid slot for a scan that has finished. Closing ends the session.
+   *
+   * This class used to declare `cleanup` twice. JavaScript keeps the later
+   * definition, so the earlier one -- which disconnected and logged that it
+   * had -- was dead code, and its missing log line made it impossible to
+   * tell from the logs whether a scan had released its browser at all.
    */
   async cleanup() {
     if (this.browser) {
       await this.browser.close();
       this.browser = null;
+      console.log('✅ [TOOLS] Browserless session closed');
     }
   }
 
