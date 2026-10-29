@@ -7,11 +7,16 @@
  */
 import OpenAI from 'openai';
 
+import { readEnvValue } from './envValue.js';
+
 export const OPENAI_DEFAULT_MODEL = 'gpt-5';
 
 export function createOpenAiProvider({
-  apiKey = process.env.OPENAI_API_KEY,
-  model = process.env.OPENAI_MODEL || OPENAI_DEFAULT_MODEL,
+  // Trimmed and unquoted for the same reason as the Muse provider: a value
+  // pasted into a hosting dashboard keeps its trailing newline, and the
+  // resulting error names the model rather than the whitespace.
+  apiKey = readEnvValue('OPENAI_API_KEY'),
+  model = readEnvValue('OPENAI_MODEL', OPENAI_DEFAULT_MODEL),
   client
 } = {}) {
   // Constructed lazily so an unset key does not throw at import time.

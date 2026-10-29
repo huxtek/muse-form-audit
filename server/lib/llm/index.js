@@ -18,6 +18,7 @@
  * not branch on provider. Providers with `usesModel: false` never receive a
  * call: the analysis layer short-circuits to the deterministic result.
  */
+import { cleanEnvValue } from './envValue.js';
 import { createHeuristicProvider } from './heuristic.js';
 import { createMuseProvider } from './muse.js';
 import { createOpenAiProvider } from './openai.js';
@@ -46,7 +47,9 @@ export function resolveProviderName(requested) {
     return requested;
   }
 
-  const fromEnv = process.env.MODEL_PROVIDER;
+  // Cleaned, so MODEL_PROVIDER="muse\n" selects Muse rather than silently
+  // failing validation and falling through to the default.
+  const fromEnv = cleanEnvValue(process.env.MODEL_PROVIDER);
   if (isValidProvider(fromEnv)) {
     return fromEnv;
   }
