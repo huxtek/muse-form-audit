@@ -184,3 +184,44 @@ describe('muse retry: secrecy and reporting', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * Meta's support asks for the request id when reporting a failure, and it is
+ * only available at the moment of the response. Without it in the error, a
+ * 404 in our logs cannot be traced on their side afterwards -- which is
+ * exactly the position we were in for the first six failures.
+ */
+describe('muse failure reporting carries a request id', () => {
+  const failWithHeaders = (status, { requestId, code }) => ({
+    ok: false,
+    status,
+    headers: { get: (name) => (name === 'x-request-id' ? requestId : null) },
+    text: async () => JSON.stringify({ error: { code, message: 'The requested model was not found.' } })
+  });
+
+  it('puts the request id and error code in the message', async () => {
+    fetchMock.mockResolvedValue(
+      failWithHeaders(404, { requestId: 'b17ca636-50e4-4e62-a66d-9072e18f28d5', code: 'model_not_found' })
+    );
+
+    await expect(ask(provider())).rejects.toThrow(/request b17ca636-50e4-4e62-a66d-9072e18f28d5/);
+    await expect(ask(provider())).rejects.toThrow(/code model_not_found/);
+  });
+
+  it('exposes them on the error for a caller that wants them structured', async () => {
+    fetchMock.mockResolvedValue(failWithHeaders(404, { requestId: 'abc-123', code: 'model_not_found' }));
+
+    await ask(provider()).catch((error) => {
+      expect(error.requestId).toBe('abc-123');
+      expect(error.errorCode).toBe('model_not_found');
+      expect(error.status).toBe(404);
+    });
+  });
+
+  it('still reports cleanly when the header is absent', async () => {
+    fetchMock.mockResolvedValue(failWithHeaders(500, { requestId: null, code: undefined }));
+
+    await expect(ask(provider())).rejects.toThrow(/Muse API error 500/);
+    await expect(ask(provider())).rejects.not.toThrow(/request null/);
+  });
+});

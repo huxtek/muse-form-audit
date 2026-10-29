@@ -352,10 +352,35 @@ export function createMuseProvider({
         /* keep the raw body */
       }
 
+      // The request id is what Meta's support asks for when reporting a
+      // failure, and it is only available here. Without it in the message, a
+      // 404 recorded in our logs cannot be traced on their side afterwards.
+      // Optional chaining because `headers` is guaranteed by the fetch spec
+      // but not by every stub a test might hand us, and a missing trace id
+      // must never be the thing that turns a reportable failure into a
+      // thrown TypeError.
+      const requestId = response.headers?.get?.('x-request-id') ?? null;
+      const errorCode = (() => {
+        try {
+          return JSON.parse(raw)?.error?.code;
+        } catch {
+          return undefined;
+        }
+      })();
+
       const failure = new Error(
-        `Muse API error ${response.status}: ${redactKey(detail, apiKey)}`.trim()
+        [
+          `Muse API error ${response.status}:`,
+          redactKey(detail, apiKey),
+          errorCode ? `[code ${errorCode}]` : '',
+          requestId ? `[request ${requestId}]` : ''
+        ]
+          .filter(Boolean)
+          .join(' ')
       );
       failure.status = response.status;
+      failure.requestId = requestId;
+      failure.errorCode = errorCode;
 
       throw RETRYABLE_STATUSES.has(response.status) ? asRetryable(failure) : failure;
     }
