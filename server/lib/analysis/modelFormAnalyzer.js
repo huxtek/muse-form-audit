@@ -121,10 +121,31 @@ export function buildAnalysisPrompt({
 
   const observed = summariseBehaviour(behaviour);
 
+  /*
+   * A label can be real, associated, and still useless. openai.com's prompt
+   * box is wrapped in a `<label>` holding the entire suggestion carousel, so
+   * the textarea's accessible name is 1,784 characters long. The extractor
+   * cuts that down for display, which would otherwise hide the problem from
+   * the analyser entirely -- hence saying so here explicitly.
+   */
+  const unusableNames = fields
+    .filter((field) => field.labelTruncated)
+    .map(
+      (field) =>
+        `- ${field.name || field.id || `type=${field.type}`}: accessible name is ` +
+        `${field.labelLength} characters long`
+    )
+    .join('\n');
+
   return [
     `Form id: ${formId || '(none)'}`,
     `Page URL: ${url || '(unknown)'}`,
     fieldSummary ? `\nFields the extractor found:\n${fieldSummary}` : '',
+    unusableNames
+      ? `\nControls whose label is too long to serve as a name (the <label> wraps ` +
+        `unrelated page content, so an agent reading the name cannot tell what the ` +
+        `control wants):\n${unusableNames}`
+      : '',
     observed ? `\n${observed}` : '',
     truncated
       ? `\nNOTE: the HTML below was truncated at ${htmlCharLimit} characters. Score only what you can see.`

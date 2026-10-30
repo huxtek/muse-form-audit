@@ -50,7 +50,14 @@ export const VISUAL_LIMITS = {
    */
   maxCaptureHeight: Number(process.env.VISUAL_MAX_CAPTURE_HEIGHT || 8000),
   /** Time for a responsive page to settle after the viewport grows. */
-  reflowSettleMs: Number(process.env.VISUAL_REFLOW_SETTLE_MS || 600)
+  reflowSettleMs: Number(process.env.VISUAL_REFLOW_SETTLE_MS || 600),
+
+  /**
+   * How many times to re-measure and regrow before settling for what we
+   * have. Growing the viewport can make the page taller, so one pass is not
+   * always enough; openai.com needs two and converges there.
+   */
+  maxGrowthPasses: Number(process.env.VISUAL_MAX_GROWTH_PASSES || 4)
 };
 
 /**
@@ -282,6 +289,15 @@ export function resolvePadding(formRect, pageSize, requested) {
  * Geometry MUST be read after this call: a vertical resize reflows a
  * responsive page, and coordinates measured at the old height would describe
  * somewhere the form no longer is.
+ *
+ * And the growing repeats, because growing the viewport can itself make the
+ * page taller: lazy sections render once they fall inside a viewport that is
+ * now thousands of pixels tall. Measured on openai.com, where the page went
+ * from 5980px to 6256px the moment the viewport reached 5980px, carrying the
+ * locale search box from y=5948 to y=6224 -- past the bottom edge of the
+ * frame it was about to be photographed in. The report said "No screenshot
+ * for this form" and gave the reason: "crop 239x52 at 1025,6177 lies outside
+ * a 1280x5980 capture". One extra pass settles it.
  */
 export async function expandViewportToPage(page, { limits = VISUAL_LIMITS, logger = console } = {}) {
   const original = page.viewport?.() ?? null;
@@ -290,33 +306,56 @@ export async function expandViewportToPage(page, { limits = VISUAL_LIMITS, logge
     return async () => {};
   }
 
-  const pageHeight = await page.evaluate(() =>
-    Math.max(document.documentElement.scrollHeight, window.innerHeight)
-  );
+  const measurePage = () =>
+    page.evaluate(() => Math.max(document.documentElement.scrollHeight, window.innerHeight));
 
-  const target = Math.min(pageHeight, limits.maxCaptureHeight);
+  let pageHeight = await measurePage();
+  let target = Math.min(pageHeight, limits.maxCaptureHeight);
 
   if (target <= original.height) {
     return async () => {};
   }
 
-  await page.setViewport({ ...original, height: target });
-  // Let the reflow settle before anything measures or photographs it.
-  await new Promise((resolve) => setTimeout(resolve, limits.reflowSettleMs));
-
-  if (pageHeight > target) {
-    logger.log?.(
-      `   📐 [VISUALS] Page is ${pageHeight}px; capturing the top ${target}px`
-    );
-  }
-
-  return async () => {
+  const restore = async () => {
     try {
       await page.setViewport(original);
     } catch {
       // The page may already be closing; restoring is a courtesy, not a need.
     }
   };
+
+  let applied = original.height;
+  // Defaulted here rather than read straight off `limits`, because callers
+  // pass partial overrides. Left undefined, the pass budget became NaN and
+  // the loop never ran, which disabled growing the viewport altogether.
+  const passBudget = Math.max(1, limits.maxGrowthPasses ?? VISUAL_LIMITS.maxGrowthPasses);
+
+  for (let pass = 1; pass <= passBudget; pass += 1) {
+    await page.setViewport({ ...original, height: target });
+    // Let the reflow settle before anything measures or photographs it.
+    await new Promise((resolve) => setTimeout(resolve, limits.reflowSettleMs));
+    applied = target;
+
+    pageHeight = await measurePage();
+    const next = Math.min(pageHeight, limits.maxCaptureHeight);
+
+    // Settled: the page stopped growing, or it has reached the cap.
+    if (next <= applied) {
+      break;
+    }
+
+    logger.log?.(
+      `   📐 [VISUALS] Growing the viewport made the page taller ` +
+        `(${applied}px -> ${pageHeight}px); regrowing`
+    );
+    target = next;
+  }
+
+  if (pageHeight > applied) {
+    logger.log?.(`   📐 [VISUALS] Page is ${pageHeight}px; capturing the top ${applied}px`);
+  }
+
+  return restore;
 }
 
 /**

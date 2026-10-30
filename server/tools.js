@@ -14,6 +14,7 @@ import {
   inferFormGroups
 } from './lib/visuals/inferFormGroups.js';
 import { looksLikeChallengePage, pageAccessError } from './lib/botWall.js';
+import { summariseFieldLabel } from './lib/analysis/fieldLabel.js';
 import {
   CONTENT_SETTLE_MS,
   FIELD_SELECTOR,
@@ -747,6 +748,14 @@ export class CrawlerTools {
         
         $form.find('input, textarea, select, button[type="submit"]').each((fieldIndex, fieldElement) => {
           const $field = $(fieldElement);
+          /*
+           * A wrapping `<label>` can hold far more than a label: openai.com
+           * puts its whole suggestion carousel inside the one around the
+           * ChatGPT textarea, giving that control a genuine 1,784-character
+           * accessible name. Kept, but cut to something a report can show as
+           * a heading, with the real length recorded next to it.
+           */
+          const label = summariseFieldLabel(this.findFieldLabel($, $field));
           const field = {
             id: $field.attr('id') || `field-${fieldIndex}`,
             name: $field.attr('name') || '',
@@ -756,7 +765,8 @@ export class CrawlerTools {
             disabled: $field.prop('disabled') || false,
             value: $field.val() || '',
             ariaLabel: $field.attr('aria-label') || '',
-            label: this.findFieldLabel($, $field),
+            label: label.text,
+            ...(label.truncated ? { labelLength: label.length, labelTruncated: true } : {}),
             options: this.extractSelectOptions($, $field)
           };
           fields.push(field);
