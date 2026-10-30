@@ -1019,7 +1019,9 @@ describe('AIScanner scan route', () => {
 
     await scanFor('https://example.com');
 
-    expect(location()).toBe('/scan?url=https%3A%2F%2Fexample.com');
+    // The normalised target, which is also what the server's guard returns,
+    // so the address bar, the job record and the fetched URL all agree.
+    expect(location()).toBe('/scan?url=https%3A%2F%2Fexample.com%2F');
   });
 
   it('carries the options that are not at their defaults', async () => {
@@ -1118,7 +1120,7 @@ describe('AIScanner scan route', () => {
     await goBack();
     await goForward();
 
-    expect(location()).toBe('/scan?url=https%3A%2F%2Fexample.com');
+    expect(location()).toBe('/scan?url=https%3A%2F%2Fexample.com%2F');
     expect(screen.queryByLabelText('Website URL for AI form analysis')).not.toBeInTheDocument();
   });
 

@@ -28,6 +28,7 @@ import {
   parseScanParams,
   SCAN_DEMO_TARGET
 } from "@/lib/scan-url";
+import { normalizeTargetUrl } from "@/lib/target-url";
 import { useScanConfig } from "@/hooks/useScanConfig";
 import FormPreviewIllustration from "@/components/FormPreviewIllustration";
 import { formAPI } from "@/services/api";
@@ -433,15 +434,6 @@ export const AIScanner = () => {
     }
   }, [currentJob?.id, currentJob?.status]);
 
-  const validateUrl = (url: string): boolean => {
-    try {
-      new URL(url);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
   const handleFullCrawlToggle = (checked: boolean) => {
     setFullCrawl(checked);
   };
@@ -671,17 +663,30 @@ export const AIScanner = () => {
       return;
     }
 
-    if (!validateUrl(url)) {
-      setUrlError('That does not look like a website URL. Try https://example.com');
+    /*
+     * `aa.com` is a website address, so it is accepted and completed to
+     * `https://aa.com/`. The normalised form is what gets navigated to,
+     * requested and shown in the field, so the address bar, the input and
+     * the report all name the same thing.
+     */
+    const normalized = normalizeTargetUrl(url);
+
+    if (!normalized.url) {
+      setUrlError(normalized.error ?? 'That does not look like a website URL.');
       toast({
-        title: "Invalid URL",
-        description: "Please enter a valid website URL (e.g., https://example.com)",
-        variant: "destructive",
+        title: 'Check the URL',
+        description: normalized.error ?? 'Please enter a valid website URL.',
+        variant: 'destructive'
       });
       return;
     }
 
+    const target = normalized.url;
+
     setUrlError(null);
+    // So the field shows what is actually being scanned rather than the
+    // shorthand that was typed.
+    setUrl(target);
 
     // After validation, so a rejected URL does not leave the button stuck
     // in a starting state the user cannot clear.
@@ -694,15 +699,15 @@ export const AIScanner = () => {
     // round trip. The URL effect treats this as "a target was asked for",
     // so it prefills over the top with identical values and leaves the job
     // that is about to arrive alone.
-    navigate(buildScanPath({ url, fullCrawl, modelProvider }));
+    navigate(buildScanPath({ url: target, fullCrawl, modelProvider }));
 
     // Set alongside the navigation so the results, whenever they land, are
     // bound to the address that asked for them.
-    const generation = beginJobFor(url);
+    const generation = beginJobFor(target);
 
     try {
       const scanResults = await formAPI.startScan({
-        url,
+        url: target,
         fullCrawl, // Pass the crawling mode to the backend
         devMode, // Header toggle, or forced on by the sample report
         modelProvider // Which model should run the analysis
@@ -713,7 +718,7 @@ export const AIScanner = () => {
         // Immediate results - create a completed job structure
         setJobState({
           id: createImmediateScanId(),
-          url,
+          url: target,
           status: 'completed',
           progress: 100,
           currentStep: 'Scan completed',
@@ -733,7 +738,7 @@ export const AIScanner = () => {
         // Job-based response - use polling
         setJobState({
           id: scanResults.jobId,
-          url,
+          url: target,
           status: 'queued',
           progress: 0,
           currentStep: 'Queued for processing...',

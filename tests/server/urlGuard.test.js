@@ -173,6 +173,111 @@ describe('assertSafeUrl: properties a future edit is most likely to break', () =
   });
 });
 
+/**
+ * A missing scheme is completed, and completing it must not become a way in.
+ *
+ * `aa.com` is how people name a website, and `new URL()` throws on it, so the
+ * API refused the most ordinary input there is. The risk in fixing that is
+ * obvious: if a prefix were added blind, `javascript:alert(1)` would turn
+ * into a fetchable address and a scheme check would never see it.
+ */
+describe('assertSafeUrl: input with no scheme', () => {
+  it('completes a bare hostname to https', async () => {
+    resolvesTo('93.184.216.34');
+
+    expect((await assertSafeUrl('example.com')).url).toBe('https://example.com/');
+  });
+
+  it('keeps the path, query and port', async () => {
+    resolvesTo('93.184.216.34');
+
+    expect((await assertSafeUrl('example.com:8443/book?from=AUS')).url).toBe(
+      'https://example.com:8443/book?from=AUS'
+    );
+  });
+
+  it('does not mistake a port for a scheme', async () => {
+    // Dots are legal in scheme names, so a single pattern read `example.com:`
+    // as a scheme and refused the address outright.
+    resolvesTo('93.184.216.34');
+
+    expect((await assertSafeUrl('example.com:8443')).url).toContain('https://example.com:8443');
+  });
+
+  it('leaves an explicit http address on http', async () => {
+    // Silently upgrading changes which page was tested.
+    resolvesTo('93.184.216.34');
+
+    expect((await assertSafeUrl('http://example.com')).url).toBe('http://example.com/');
+  });
+
+  it('refuses a dangerous scheme rather than prefixing it', async () => {
+    for (const input of ['javascript:alert(1)', 'file:///etc/passwd', 'data:text/html,x']) {
+      await expect(assertSafeUrl(input), input).rejects.toMatchObject({
+        code: 'SCHEME_BLOCKED'
+      });
+    }
+  });
+
+  it('still blocks a private target spelled without a scheme', async () => {
+    // The property that matters. Completing the scheme must not smuggle a
+    // target past the thing that exists to refuse it.
+    resolvesTo('127.0.0.1');
+
+    await expect(assertSafeUrl('localhost')).rejects.toMatchObject({
+      code: 'PRIVATE_TARGET_BLOCKED'
+    });
+  });
+
+  it('still blocks cloud metadata spelled without a scheme', async () => {
+    await expect(assertSafeUrl('169.254.169.254')).rejects.toMatchObject({
+      code: 'PRIVATE_TARGET_BLOCKED'
+    });
+  });
+
+  it('still blocks a reserved range spelled without a scheme', async () => {
+    await expect(assertSafeUrl('10.0.0.1')).rejects.toMatchObject({
+      code: 'PRIVATE_TARGET_BLOCKED'
+    });
+  });
+
+  /*
+   * Credentials with no scheme are refused down two different paths, and the
+   * code depends on the password's first character. `user:pw@example.com` is
+   * a valid URI with the scheme `user`, so it is passed through and refused
+   * by the protocol check; `admin:123@example.com` looks like a port, so it
+   * is completed to https and refused by the credentials check.
+   *
+   * The split is not worth removing: `user:pw@host` and `mailto:a@b.com` are
+   * the same shape, so a credentials pre-check would have to call mailto an
+   * embedded credential. What matters is that neither is ever fetched.
+   */
+  it('still refuses credentials read as an opaque scheme', async () => {
+    resolvesTo('93.184.216.34');
+
+    await expect(assertSafeUrl('user:pw@example.com')).rejects.toMatchObject({
+      code: 'SCHEME_BLOCKED'
+    });
+    expect(dnsLookup).not.toHaveBeenCalled();
+  });
+
+  it('still refuses credentials whose password could pass for a port', async () => {
+    resolvesTo('93.184.216.34');
+
+    await expect(assertSafeUrl('admin:123@example.com')).rejects.toMatchObject({
+      code: 'URL_BLOCKED'
+    });
+    expect(dnsLookup).not.toHaveBeenCalled();
+  });
+
+  it('keeps an @ that is part of the path or query', async () => {
+    resolvesTo('93.184.216.34');
+
+    expect((await assertSafeUrl('example.com/path@x')).url).toBe('https://example.com/path@x');
+    expect((await assertSafeUrl('example.com?q=a@b')).url).toBe('https://example.com/?q=a@b');
+  });
+});
+
 describe('safeFetch: redirect handling', () => {
   const redirectTo = (location) => ({
     status: 302,

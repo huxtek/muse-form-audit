@@ -245,9 +245,27 @@ export const assertSafeUrl = async (rawUrl, overrides = {}) => {
     throw new UrlGuardError('URL contains unencoded whitespace', 'INVALID_URL');
   }
 
+  /*
+   * `aa.com` is how people name a website, and `new URL()` throws on it, so
+   * the API refused the most ordinary input there is. A missing scheme is
+   * completed to https here as well as in the browser, because this endpoint
+   * is callable directly and the browser's convenience is not a rule.
+   *
+   * Only input with no scheme at all is completed. Anything already carrying
+   * one is passed through untouched and judged by the protocol check below,
+   * so `javascript:` and `file:` are refused rather than turned into
+   * something fetchable. The two patterns exist because dots are legal in
+   * scheme names -- `coap+tcp:` is real -- so one pattern read `aa.com:8443`
+   * as the scheme `aa.com:`; a port starts with a digit, an opaque scheme
+   * does not.
+   */
+  const hasScheme =
+    /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed) || /^[a-zA-Z][a-zA-Z0-9+.-]*:(?!\d)/.test(trimmed);
+  const candidate = hasScheme ? trimmed : `https://${trimmed.replace(/^\/\//, '')}`;
+
   let parsed;
   try {
-    parsed = new URL(trimmed);
+    parsed = new URL(candidate);
   } catch {
     throw new UrlGuardError('URL is not well formed', 'INVALID_URL');
   }

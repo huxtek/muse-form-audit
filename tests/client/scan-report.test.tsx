@@ -424,7 +424,7 @@ describe('report actions', () => {
 
     const details = screen.getByText('Target URL:').parentElement as HTMLElement;
 
-    expect(within(details).getByText('https://example.com')).toBeInTheDocument();
+    expect(within(details).getByText('https://example.com/')).toBeInTheDocument();
     expect(screen.getByText('Job ID:')).toBeInTheDocument();
   });
 });
@@ -451,7 +451,7 @@ describe('report header', () => {
       summary: { totalPages: 1, totalForms: 2 }
     });
 
-    expect(screen.getByText(/https:\/\/example\.com · 2 forms/)).toBeInTheDocument();
+    expect(screen.getByText(/https:\/\/example\.com\/ · 2 forms/)).toBeInTheDocument();
   });
 
   it('replaces the progress card rather than sitting under it', async () => {
