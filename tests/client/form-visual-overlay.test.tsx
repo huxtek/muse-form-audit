@@ -495,3 +495,69 @@ describe('FormVisualOverlay tooltip overflow', () => {
     expect(highlight).toHaveTextContent('5');
   });
 });
+
+/**
+ * A form that is not rendered is not a capture failure.
+ *
+ * amazon.com's `ap_navbar_form` is its sign-in form, hidden with
+ * `display:none` until the account menu opens, and `ue_backdetect` is a
+ * utility form with `visibility:hidden` that is never meant to be seen. Both
+ * are real forms worth scoring and neither can be photographed. "No
+ * screenshot for this form / Capture skipped" read as a fault on our side.
+ */
+const hiddenForm = (concealment?: { reason: string; at: string }): AnalyzedForm =>
+  buildForm({
+    formId: 'ap_navbar_form',
+    visual: {
+      visualIndex: 0,
+      width: 0,
+      height: 0,
+      hasScreenshot: false,
+      fields: [],
+      notRendered: true,
+      ...(concealment ? { concealment } : {}),
+      unavailableReason: concealment
+        ? `not rendered on the page as loaded (${concealment.reason} on ${concealment.at})`
+        : 'not rendered on the page as loaded'
+    }
+  });
+
+describe('FormVisualOverlay on a form that is not rendered', () => {
+  it('says the form is not shown rather than blaming the capture', () => {
+    render(<FormVisualOverlay form={hiddenForm()} jobId="job-abc" />);
+
+    expect(screen.getByText(/this form is not shown on the page/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no screenshot for this form/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/capture skipped/i)).not.toBeInTheDocument();
+  });
+
+  it('names the mechanism that hides it', () => {
+    render(
+      <FormVisualOverlay
+        form={hiddenForm({ reason: 'display:none', at: 'an ancestor <div>' })}
+        jobId="job-abc"
+      />
+    );
+
+    expect(screen.getByText(/display:none on an ancestor <div>/i)).toBeInTheDocument();
+  });
+
+  it('says the form is still scored, so a low score is read in context', () => {
+    render(<FormVisualOverlay form={hiddenForm()} jobId="job-abc" />);
+
+    expect(screen.getByText(/still scored/i)).toBeInTheDocument();
+  });
+
+  it('shows no image and no highlights', () => {
+    render(<FormVisualOverlay form={hiddenForm()} jobId="job-abc" />);
+
+    expect(screen.queryByAltText(/screenshot of form/i)).not.toBeInTheDocument();
+    expect(highlights()).toHaveLength(0);
+  });
+
+  it('still points at the written findings', () => {
+    render(<FormVisualOverlay form={hiddenForm()} jobId="job-abc" />);
+
+    expect(screen.getByText(/details tab/i)).toBeInTheDocument();
+  });
+});

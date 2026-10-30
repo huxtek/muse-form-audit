@@ -138,6 +138,8 @@ export function toFormGeometry(raw, pageSize, minSize) {
     formIndex: raw.formIndex,
     signature: raw.signature,
     visible: box.width >= minSize && box.height >= minSize,
+    /** Why the form generates no box, when it generates none. */
+    concealment: raw.concealment ?? null,
     /** 'form', or which descendants stood in for an unusable form box. */
     measuredFrom,
     rect: {
@@ -196,13 +198,50 @@ export async function readFormGeometry(page, limits = VISUAL_LIMITS) {
           : null;
       };
 
+      /*
+       * Why a form generates no box.
+       *
+       * "Hidden or has no size" was true but unhelpful: amazon.com returns
+       * `ue_backdetect`, a utility form never meant to be seen, alongside
+       * `ap_navbar_form`, the sign-in form that only renders once the
+       * account menu opens. Both are real forms worth scoring, and neither
+       * can be photographed. Naming the mechanism is what lets the report
+       * say which it is rather than shrugging.
+       *
+       * Ancestors are walked because concealment is almost always applied
+       * above the form, on the panel or drawer holding it.
+       */
+      const concealmentOf = (el) => {
+        let node = el;
+
+        for (let depth = 0; node && depth < 20; depth += 1) {
+          const style = window.getComputedStyle(node);
+          const at = node === el ? 'the form' : `an ancestor <${node.tagName.toLowerCase()}>`;
+
+          if (style.display === 'none') return { reason: 'display:none', at };
+          if (style.visibility === 'hidden') return { reason: 'visibility:hidden', at };
+          if (node.hasAttribute('hidden')) return { reason: 'the hidden attribute', at };
+          if (node.getAttribute('aria-hidden') === 'true') {
+            return { reason: 'aria-hidden="true"', at };
+          }
+
+          node = node.parentElement;
+        }
+
+        return { reason: 'zero size', at: 'the form' };
+      };
+
       // Raw boxes only. Every judgement about which box to crop happens in
       // node, where it can be tested without a layout engine.
       const measured = forms.map((form, formIndex) => {
         const formRect = form.getBoundingClientRect();
+        const hasBox = formRect.width >= 1 && formRect.height >= 1;
 
         return {
           formIndex,
+          // Only computed for forms with no box; style lookups force layout,
+          // so they are not worth paying for on a form we can photograph.
+          concealment: hasBox ? null : concealmentOf(form),
           signature: {
             id: form.getAttribute('id') || '',
             name: form.getAttribute('name') || '',
@@ -414,14 +453,31 @@ export async function captureFormVisuals(
     };
 
     if (!form.visible) {
-      // Say which of the two it was. "No size" on a form that holds controls
-      // means a layout quirk, not a hidden form, and the distinction is the
-      // difference between a bug report and a shrug.
-      const reason = form.fields?.length
-        ? 'the form element has no box of its own and no measurable contents'
-        : 'form is hidden or has no size';
+      /*
+       * Not rendered is not the same as not there.
+       *
+       * A form hidden behind a flyout is still a real form worth scoring --
+       * amazon.com's `ap_navbar_form` is its sign-in form, which an agent
+       * very much needs to understand -- so it keeps its findings and is
+       * marked as unrendered rather than dropped. What cannot be done is
+       * photograph it, and the reason is now specific: "display:none on an
+       * ancestor <div>" tells a developer it is a drawer, where "hidden or
+       * has no size" told them nothing.
+       */
+      const { reason: cause, at } = form.concealment ?? {};
+      const reason = cause
+        ? `not rendered on the page as loaded (${cause} on ${at})`
+        : form.fields?.length
+          ? 'the form element has no box of its own and no measurable contents'
+          : 'not rendered on the page as loaded';
 
-      visuals.push({ ...base, screenshot: null, unavailableReason: reason });
+      visuals.push({
+        ...base,
+        screenshot: null,
+        notRendered: true,
+        ...(cause ? { concealment: form.concealment } : {}),
+        unavailableReason: reason
+      });
       continue;
     }
 

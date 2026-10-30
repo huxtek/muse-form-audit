@@ -520,7 +520,62 @@ describe('captureFormVisuals', () => {
 
     expect(page.screenshot).not.toHaveBeenCalled();
     expect(visual.screenshot).toBeNull();
-    expect(visual.unavailableReason).toMatch(/hidden|no size/i);
+    // Flagged rather than only described, so the report can label the form
+    // instead of leaving an unexplained gap where a picture should be.
+    expect(visual.notRendered).toBe(true);
+    expect(visual.unavailableReason).toMatch(/not rendered/i);
+  });
+
+  it('names the mechanism that hides a form when the page reported one', async () => {
+    // amazon.com's sign-in form sits behind the account menu. "Hidden or has
+    // no size" told a developer nothing; display:none on an ancestor tells
+    // them it is a drawer.
+    const page = fakePage({
+      geometry: {
+        pageSize: { width: 1280, height: 2000 },
+        forms: [
+          {
+            formIndex: 0,
+            signature: { id: 'ap_navbar_form', name: 'signIn', fieldCount: 1 },
+            visible: false,
+            concealment: { reason: 'display:none', at: 'an ancestor <div>' },
+            rect: { x: 0, y: 0, width: 0, height: 0 },
+            fields: []
+          }
+        ]
+      }
+    });
+
+    const [visual] = await captureFormVisuals(page, { limits: LIMITS, logger: silent });
+
+    expect(visual.notRendered).toBe(true);
+    expect(visual.concealment).toEqual({ reason: 'display:none', at: 'an ancestor <div>' });
+    expect(visual.unavailableReason).toBe(
+      'not rendered on the page as loaded (display:none on an ancestor <div>)'
+    );
+  });
+
+  it('still explains a form whose box is unusable but whose contents are not', async () => {
+    // Different case, different sentence: a form with measurable controls and
+    // no box of its own is a layout quirk, not a hidden form.
+    const page = fakePage({
+      geometry: {
+        pageSize: { width: 1280, height: 2000 },
+        forms: [
+          {
+            formIndex: 0,
+            signature: { fieldCount: 2 },
+            visible: false,
+            rect: { x: 0, y: 0, width: 0, height: 0 },
+            fields: [{ name: 'email', id: '', rect: { x: 0, y: 0, width: 10, height: 10 } }]
+          }
+        ]
+      }
+    });
+
+    const [visual] = await captureFormVisuals(page, { limits: LIMITS, logger: silent });
+
+    expect(visual.unavailableReason).toMatch(/no box of its own/);
   });
 
   it('keeps the field geometry when the screenshot itself fails', async () => {

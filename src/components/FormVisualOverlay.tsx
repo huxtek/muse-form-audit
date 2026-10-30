@@ -218,16 +218,33 @@ export const FormVisualOverlay = ({
     );
   }
 
+  /*
+   * A form that is not rendered gets its own wording.
+   *
+   * "No screenshot for this form / Capture skipped" reads as a failure on our
+   * side, when the truth is that the form is not on the page to photograph:
+   * amazon.com's sign-in form lives behind the account menu. Saying which
+   * mechanism hides it turns an apology into information.
+   */
   function renderUnavailable() {
+    const notRendered = visual?.notRendered === true;
+    const concealment = visual?.concealment;
+
     return (
       <div className="flex items-start gap-3 p-4 rounded-lg border border-border/50 bg-muted/30">
         <ImageOff className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
         <div className="text-sm">
-          <p className="font-medium text-foreground">No screenshot for this form</p>
+          <p className="font-medium text-foreground">
+            {notRendered ? "This form is not shown on the page" : "No screenshot for this form"}
+          </p>
           <p className="text-muted-foreground">
-            {visual?.unavailableReason
-              ? `Capture skipped: ${visual.unavailableReason}.`
-              : "The form was not captured, so there is nothing to highlight."}{" "}
+            {notRendered
+              ? `It is in the markup but generates nothing on screen as the page loads${
+                  concealment ? ` (${concealment.reason} on ${concealment.at})` : ""
+                }, so there is nothing to photograph. It is still scored: an agent has to understand a form whether or not a person can see it.`
+              : visual?.unavailableReason
+                ? `Capture skipped: ${visual.unavailableReason}.`
+                : "The form was not captured, so there is nothing to highlight."}{" "}
             The written findings are in the Details tab.
           </p>
         </div>

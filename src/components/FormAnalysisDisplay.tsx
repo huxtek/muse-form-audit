@@ -15,6 +15,7 @@ import {
   Target,
   Settings,
   AlertCircle,
+  EyeOff,
   Info
 } from 'lucide-react';
 
@@ -145,6 +146,15 @@ const FormAnalysisDisplay: React.FC<FormAnalysisDisplayProps> = ({
                     {form.formId && (
                       <Badge variant="outline" className="text-xs">
                         ID: {form.formId}
+                      </Badge>
+                    )}
+                    {/* So a score of 36 is read in context: this form is not
+                        on screen, which is why it has no screenshot and why
+                        its findings cover the markup only. */}
+                    {form.visual?.notRendered && (
+                      <Badge variant="secondary" className="text-xs gap-1">
+                        <EyeOff className="h-3 w-3" />
+                        Not shown on page
                       </Badge>
                     )}
                   </div>

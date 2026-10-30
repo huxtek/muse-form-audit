@@ -166,6 +166,16 @@ export interface FormVisual {
    */
   measuredFrom?: 'children' | 'fields';
   unavailableReason?: string;
+  /**
+   * True when the form is in the markup but generates no box on the page as
+   * loaded: a sign-in drawer behind a menu, or a utility form never meant to
+   * be seen. Still scored -- an agent has to understand a sign-in form
+   * whether or not it is on screen -- but it cannot be photographed, so the
+   * report labels it rather than leaving an unexplained gap.
+   */
+  notRendered?: boolean;
+  /** Which mechanism hides it, and where that mechanism is applied. */
+  concealment?: { reason: string; at: string };
 }
 
 export interface FormAccessibility {
