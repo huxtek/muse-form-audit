@@ -3,6 +3,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -997,10 +1008,14 @@ export const AIScanner = () => {
     polls < SLOW_POLL_AFTER_POLLS ? POLL_INTERVAL_MS : SLOW_POLL_INTERVAL_MS;
 
   /**
-   * Stops the running scan.
+   * Stops the running scan, once the confirmation has been accepted.
    *
-   * No confirmation dialogue: the scan is cheap to start again, and a modal
-   * between the user and the stop button is worse than an accidental stop.
+   * This originally had no confirmation, on the reasoning that a scan is
+   * cheap to restart and a modal between someone and a stop button is worse
+   * than an accidental stop. That trade is wrong here: the scan is not
+   * cheap in the setting that matters, since a mis-click during a
+   * presentation throws away a minute of waiting in front of an audience,
+   * and a cancelled scan keeps no partial report to fall back on.
    *
    * The server marks the job cancelled before its agent reaches a
    * checkpoint, so the next poll already reports it. A 409 means the scan
@@ -1717,15 +1732,48 @@ export const AIScanner = () => {
                   actions, so this card needs nothing else.
                 */}
                 <div className="flex justify-center">
-                  <Button
-                    onClick={handleCancelScan}
-                    variant="outline"
-                    size="sm"
-                    disabled={isCancelling}
-                  >
-                    <CircleSlash className="h-4 w-4 mr-2" />
-                    {isCancelling ? 'Stopping...' : 'Cancel scan'}
-                  </Button>
+                  <AlertDialog>
+                    {/*
+                      Outline until hovered, then destructive. The action is
+                      not reversible -- a cancelled scan keeps no partial
+                      report -- so the colour says so at the moment of
+                      pointing at it, without painting a permanent red
+                      button into the middle of a working scan.
+                    */}
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={isCancelling}
+                        className="hover:bg-destructive hover:text-destructive-foreground hover:border-destructive focus-visible:ring-destructive"
+                      >
+                        <CircleSlash className="h-4 w-4 mr-2" />
+                        {isCancelling ? 'Stopping...' : 'Cancel scan'}
+                      </Button>
+                    </AlertDialogTrigger>
+
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Stop this scan?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          The scan will stop where it is and no report will be produced.
+                          Anything analysed so far is discarded, and scanning
+                          {currentJob.url ? ' this page' : ' again'} means starting over.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        {/* Carrying on is the safe option, so it is the one
+                            that reads as ordinary. */}
+                        <AlertDialogCancel>Keep scanning</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleCancelScan}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Stop scan
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </CardContent>
             </Card>

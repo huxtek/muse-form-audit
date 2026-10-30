@@ -214,9 +214,9 @@ describe('AIScanner polling', () => {
     expect(screen.getByRole('button', { name: /cancel scan/i })).toBeInTheDocument();
   });
 
-  it('asks the server to stop the scan it is actually showing', async () => {
-    // The previous mid-scan button navigated away and left the crawler
-    // running. This one has to reach the backend with the right job id.
+  it('asks before stopping, and does not stop until confirmed', async () => {
+    // Stopping is not reversible: a cancelled scan keeps no partial report.
+    // Pressing the button must open the question, not answer it.
     getReportMock.mockResolvedValue(jobRecord({ status: 'running', progress: 45 }));
     cancelScanMock.mockResolvedValue({ success: true, status: 'cancelled' });
 
@@ -224,6 +224,44 @@ describe('AIScanner polling', () => {
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /cancel scan/i }));
+    });
+
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByText(/stop this scan\?/i)).toBeInTheDocument();
+    expect(cancelScanMock).not.toHaveBeenCalled();
+  });
+
+  it('leaves the scan running when the confirmation is declined', async () => {
+    getReportMock.mockResolvedValue(jobRecord({ status: 'running', progress: 45 }));
+
+    await submitScan();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /cancel scan/i }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /keep scanning/i }));
+    });
+
+    expect(cancelScanMock).not.toHaveBeenCalled();
+    expect(screen.getByText('RUNNING')).toBeInTheDocument();
+  });
+
+  it('asks the server to stop the scan it is actually showing, once confirmed', async () => {
+    // The old mid-scan button navigated away and left the crawler running.
+    // This one has to reach the backend with the right job id.
+    getReportMock.mockResolvedValue(jobRecord({ status: 'running', progress: 45 }));
+    cancelScanMock.mockResolvedValue({ success: true, status: 'cancelled' });
+
+    await submitScan();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /cancel scan/i }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^stop scan$/i }));
     });
 
     expect(cancelScanMock).toHaveBeenCalledWith('job-1');
