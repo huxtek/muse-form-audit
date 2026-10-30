@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import { FormVisualOverlay } from '@/components/FormVisualOverlay';
 import type { AnalyzedForm } from '@/lib/scan-types';
@@ -350,7 +350,7 @@ describe('FormVisualOverlay legend and footnotes', () => {
     loadImage();
 
     // Silently dropping a finding would hide a real problem from the user.
-    expect(screen.getByText(/could not be placed on the image/i)).toBeInTheDocument();
+    expect(screen.getByText(/not marked on this image/i)).toBeInTheDocument();
     expect(screen.getByText(/ghostField/)).toBeInTheDocument();
     expect(highlights()).toHaveLength(1);
   });
@@ -559,5 +559,103 @@ describe('FormVisualOverlay on a form that is not rendered', () => {
     render(<FormVisualOverlay form={hiddenForm()} jobId="job-abc" />);
 
     expect(screen.getByText(/details tab/i)).toBeInTheDocument();
+  });
+});
+
+/**
+ * The image must not imply a form's worst problem is milder than it is.
+ *
+ * expedia.com's search form is the measured case. Its Dates, Travelers,
+ * Adults and Children inputs all carry `class="is-hidden"` behind visible
+ * trigger buttons, so none of them has a box and none of their four
+ * high-severity findings can be drawn. The only finding that could be placed
+ * was a medium on the destination field, so the picture showed a medium and a
+ * low while the page map coloured the same form red from the same data.
+ */
+const EXPEDIA_ISSUES = [
+  { field: 'id__R65p6nf9vvnvtpkpl9_-input1', severity: 'high' as const, issue: 'Dates input has no name' },
+  { field: 'id__R65p6nf9vvnvtpkpl9_-input1', severity: 'medium' as const, issue: 'Carries class is-hidden' },
+  { field: 'input-id__r1h_', severity: 'high' as const, issue: 'Travelers input has no name' },
+  { field: 'uitk-step-adults-id__r1j_', severity: 'high' as const, issue: 'Adults stepper has no name' },
+  { field: 'uitk-step-children-id__r1m_', severity: 'high' as const, issue: 'Children stepper has no name' },
+  { field: 'custname', severity: 'medium' as const, issue: 'Placed on the image' }
+];
+
+/** The shape expedia returns: the hidden inputs are in the markup. */
+const expediaForm = () =>
+  buildForm({
+    formId: 'lodging_search_form',
+    fields: [
+      { id: 'id__R65p6nf9vvnvtpkpl9_-input1', name: '', type: 'text' },
+      { id: 'input-id__r1h_', name: '', type: 'text' },
+      { id: 'uitk-step-adults-id__r1j_', name: '', type: 'text' },
+      { id: 'uitk-step-children-id__r1m_', name: '', type: 'text' },
+      { id: 'custname-input', name: 'custname', type: 'text' }
+    ],
+    accessibility: { score: 54, fieldIssues: EXPEDIA_ISSUES }
+  });
+
+describe('findings that cannot be drawn on the form image', () => {
+  it('states the severities that are missing from the picture', () => {
+    // The whole point: four highs vanished from the image with no sign of it.
+    render(<FormVisualOverlay form={expediaForm()} jobId="job-abc" />);
+    loadImage();
+
+    const panel = screen.getByText(/not marked on this image/i).closest('div') as HTMLElement;
+
+    expect(within(panel).getByText(/4 high/)).toBeInTheDocument();
+  });
+
+  it('counts every finding it could not draw', () => {
+    render(<FormVisualOverlay form={expediaForm()} jobId="job-abc" />);
+    loadImage();
+
+    // Five of the six: only the medium on custname has a box to sit on.
+    expect(screen.getByText(/5 findings not marked on this image/i)).toBeInTheDocument();
+  });
+
+  it('still draws the finding that does have a box', () => {
+    render(<FormVisualOverlay form={expediaForm()} jobId="job-abc" />);
+    loadImage();
+
+    expect(highlights()).toHaveLength(1);
+  });
+
+  it('says a control exists but is not rendered, when it does', () => {
+    render(<FormVisualOverlay form={expediaForm()} jobId="job-abc" />);
+    loadImage();
+
+    expect(screen.getAllByText(/in the markup but not rendered/i).length).toBeGreaterThan(0);
+  });
+
+  it('distinguishes a name it could not find at all', () => {
+    // Different reason, different scepticism: a name matching no extracted
+    // control may be the analyser inventing one.
+    const form = buildForm({
+      fields: [{ id: 'custname-input', name: 'custname', type: 'text' }],
+      accessibility: {
+        fieldIssues: [{ field: 'ghostField', severity: 'high', issue: 'Nowhere to be found' }]
+      }
+    });
+
+    render(<FormVisualOverlay form={form} jobId="job-abc" />);
+    loadImage();
+
+    expect(screen.getByText(/not found among the extracted controls/i)).toBeInTheDocument();
+  });
+
+  it('groups several findings on one control into a single row', () => {
+    render(<FormVisualOverlay form={expediaForm()} jobId="job-abc" />);
+    loadImage();
+
+    // The Dates input has a high and a medium; one row, worst severity.
+    expect(screen.getByText(/2 findings ·/)).toBeInTheDocument();
+  });
+
+  it('says nothing when every finding found a box', () => {
+    render(<FormVisualOverlay form={buildForm()} jobId="job-abc" />);
+    loadImage();
+
+    expect(screen.queryByText(/not marked on this image/i)).not.toBeInTheDocument();
   });
 });

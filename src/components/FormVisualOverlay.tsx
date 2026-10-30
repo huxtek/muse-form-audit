@@ -262,12 +262,69 @@ export const FormVisualOverlay = ({
           {visual?.truncated ? " The form was taller than the capture limit, so the image is cropped." : ""}
         </p>
 
-        {unmatched.length > 0 && (
-          <p className="text-xs text-muted-foreground">
-            {unmatched.length} finding{unmatched.length === 1 ? "" : "s"} could not be placed on the
-            image ({unmatched.map((issue) => issue.field).join(", ")}). See the Details tab.
+        {unmatched.length > 0 && renderUnplacedFindings(unmatched)}
+      </div>
+    );
+  }
+
+  /**
+   * What the picture is not showing, said where the picture is.
+   *
+   * A finding can only be drawn on a control that has a box, and plenty do
+   * not. expedia.com's search form is the measured case: its Dates,
+   * Travelers, Adults and Children inputs all carry `class="is-hidden"`
+   * behind visible trigger buttons, so the four high-severity findings about
+   * them have nowhere to be drawn. Only one finding -- a medium on the
+   * destination field -- could be placed, so the image looked like a form
+   * whose worst problem was a medium, while the page map coloured the same
+   * form red from the same data.
+   *
+   * The severities are repeated here because that is the part that went
+   * missing. Guessing a box instead -- attributing a hidden input's finding
+   * to the trigger that stands in for it -- would point confidently at a
+   * control the finding is not about, which is worse than not drawing it.
+   */
+  function renderUnplacedFindings(unmatched: FieldIssue[]) {
+    const counts = countsOf(unmatched);
+    const groups = groupByField(unmatched);
+
+    return (
+      <div className="p-3 rounded-lg border border-border/50 bg-muted/30 space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-muted-foreground shrink-0" />
+          <p className="text-sm font-medium text-foreground">
+            {unmatched.length} finding{unmatched.length === 1 ? "" : "s"} not marked on this image
           </p>
-        )}
+          {SEVERITY_ORDER.filter((severity) => counts[severity] > 0).map((severity) => (
+            <Badge key={severity} variant="outline" className="text-xs">
+              <span
+                className={`inline-block h-2 w-2 rounded-full mr-2 ${SEVERITY_STYLES[severity].dot}`}
+              />
+              {counts[severity]} {SEVERITY_STYLES[severity].label}
+            </Badge>
+          ))}
+        </div>
+
+        <ul className="space-y-1">
+          {groups.map((group) => (
+            <li key={group.identifier} className="text-xs text-muted-foreground">
+              <span
+                className={`inline-block h-2 w-2 rounded-full mr-2 ${
+                  SEVERITY_STYLES[group.severity].dot
+                }`}
+              />
+              <code className="font-mono text-foreground">{group.label}</code>{" "}
+              {group.issues.length} finding{group.issues.length === 1 ? "" : "s"} &middot;{" "}
+              {group.inMarkup
+                ? "in the markup but not rendered, so there is no box to point at"
+                : "named by the analyser but not found among the extracted controls"}
+            </li>
+          ))}
+        </ul>
+
+        <p className="text-xs text-muted-foreground">
+          The full text of each is in the Details tab.
+        </p>
       </div>
     );
   }
@@ -418,7 +475,11 @@ export const FormVisualOverlay = ({
   }
 
   function countsBySeverity(): Record<IssueSeverity, number> {
-    return fieldIssues.reduce(
+    return countsOf(fieldIssues);
+  }
+
+  function countsOf(issues: FieldIssue[]): Record<IssueSeverity, number> {
+    return issues.reduce(
       (acc, issue) => {
         acc[issue.severity] = (acc[issue.severity] ?? 0) + 1;
 
@@ -428,12 +489,63 @@ export const FormVisualOverlay = ({
     );
   }
 
+  /**
+   * One row per control, worst severity first, keeping the order the findings
+   * arrived in. `inMarkup` separates the two reasons a finding cannot be
+   * drawn: a control that exists and is not rendered, and a name that does
+   * not match any control we extracted. They call for different scepticism,
+   * so they should not read the same.
+   */
+  function groupByField(issues: FieldIssue[]): UnplacedGroup[] {
+    const markup = new Set(
+      (form.fields ?? []).flatMap((field) =>
+        [field.id, field.name]
+          .filter((value): value is string => Boolean(value))
+          .map((value) => value.toLowerCase())
+      )
+    );
+    const groups = new Map<string, UnplacedGroup>();
+
+    for (const issue of issues) {
+      const identifier = issue.field.toLowerCase();
+      const existing = groups.get(identifier);
+
+      if (existing) {
+        existing.issues.push(issue);
+        existing.severity = worstSeverity(existing.issues);
+        continue;
+      }
+
+      groups.set(identifier, {
+        identifier,
+        label: issue.field,
+        issues: [issue],
+        severity: issue.severity,
+        inMarkup: markup.has(identifier)
+      });
+    }
+
+    return [...groups.values()].sort(
+      (a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity)
+    );
+  }
+
   function worstSeverity(issues: FieldIssue[]): IssueSeverity {
     return (
       SEVERITY_ORDER.find((severity) => issues.some((issue) => issue.severity === severity)) ?? "low"
     );
   }
 };
+
+/** A control whose findings cannot be drawn, and why. */
+interface UnplacedGroup {
+  identifier: string;
+  label: string;
+  issues: FieldIssue[];
+  severity: IssueSeverity;
+  /** True when the control is in the extracted markup but has no box. */
+  inMarkup: boolean;
+}
 
 interface FormVisualOverlayProps {
   /** The analyzed form, including its captured geometry. */
