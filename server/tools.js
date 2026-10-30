@@ -8,6 +8,11 @@ import {
   readFormGeometry
 } from './lib/visuals/captureFormVisuals.js';
 import { PROBE_ENABLED, probeFormBehaviour } from './lib/analysis/probeFormBehaviour.js';
+import {
+  FORM_INFERENCE_ENABLED,
+  INFERRED_FORM_ATTRIBUTE,
+  inferFormGroups
+} from './lib/visuals/inferFormGroups.js';
 
 /**
  * AI Tools for comprehensive website crawling and form analysis
@@ -367,7 +372,21 @@ export class CrawlerTools {
         // Wait for any dynamic content
         console.log('⏳ [TOOLS] Waiting for dynamic content...');
         await new Promise(resolve => setTimeout(resolve, 2000));
-        
+
+        /*
+         * Wrap form-like groups the page never put in a `<form>`.
+         *
+         * Runs before the serialisation below and before the geometry pass
+         * later, because both enumerate forms independently and have to
+         * agree on the set. A signup page with no form element reported zero
+         * forms until this existed -- the measured case being
+         * instagram.com/accounts/emailsignup/, which renders three visible
+         * fields and no form tag.
+         */
+        if (FORM_INFERENCE_ENABLED) {
+          await inferFormGroups(page);
+        }
+
         // Get FULL HTML content - no truncation for GPT-5
         console.log('📝 [TOOLS] Getting page content...');
         const html = await page.content();
@@ -535,6 +554,26 @@ export class CrawlerTools {
         const formId = $form.attr('id') || `form-${index}`;
         const action = $form.attr('action') || '';
         const method = ($form.attr('method') || 'GET').toUpperCase();
+
+        /*
+         * A form we wrapped around orphan fields, rather than one the page
+         * declared. Recorded so the report can say which it is: inventing a
+         * grouping and presenting it as the author's markup are different
+         * claims.
+         *
+         * The marker and the `display: contents` that made the wrapper safe
+         * are stripped before the HTML goes any further. Both are ours, and
+         * leaving them in would mean asking the model to audit markup we
+         * injected -- an invented attribute and an unexplained inline style
+         * are exactly the sort of thing it would report as a finding.
+         */
+        const isInferred = $form.attr(INFERRED_FORM_ATTRIBUTE) !== undefined;
+
+        if (isInferred) {
+          $form.removeAttr(INFERRED_FORM_ATTRIBUTE);
+          $form.removeAttr('style');
+        }
+
         const formHtml = $.html($form);
         
         console.log(`📋 [TOOLS] Form ${index + 1}: id="${formId}", action="${action}", method="${method}"`);
@@ -579,6 +618,8 @@ export class CrawlerTools {
           formId,
           action,
           method,
+          /** True when we grouped loose fields rather than finding a <form>. */
+          inferred: isInferred,
           formHtml,
           fields,
           characteristics,
