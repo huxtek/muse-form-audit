@@ -13,6 +13,7 @@ import {
   INFERRED_FORM_ATTRIBUTE,
   inferFormGroups
 } from './lib/visuals/inferFormGroups.js';
+import { looksLikeChallengePage, pageAccessError } from './lib/botWall.js';
 
 /**
  * AI Tools for comprehensive website crawling and form analysis
@@ -368,6 +369,55 @@ export class CrawlerTools {
         const finalUrl = response.url();
         console.log(`📊 [TOOLS] Page loaded with status: ${status}`);
         console.log(`📊 [TOOLS] Final URL: ${finalUrl}`);
+
+        /*
+         * Stop here when the page refused us.
+         *
+         * The status used to be logged and otherwise ignored, so a refusal
+         * was serialised, found to contain no `<form>`, and reported as a
+         * completed scan with zero forms -- indistinguishable from a page
+         * that genuinely has none. aa.com answers 403 from Akamai with an
+         * "Access Denied" body, and the scan said "Scan completed - no forms
+         * found".
+         *
+         * The body is read first because it is what identifies the
+         * gatekeeper, and naming it is the difference between "we were not
+         * allowed to look" and an unexplained failure.
+         */
+        if (status >= 400) {
+          const blockedHtml = await page.content().catch(() => '');
+
+          console.error(`❌ [TOOLS] Page refused the request: HTTP ${status}`);
+
+          throw pageAccessError({
+            status,
+            headers: response.headers(),
+            html: blockedHtml,
+            url: finalUrl || url
+          });
+        }
+
+        /*
+         * Some vendors answer a challenge with 200 rather than an error
+         * status. Caught only when the page also has no fields and is tiny,
+         * so a readable page that merely mentions a vendor is not discarded.
+         */
+        const earlyHtml = await page.content().catch(() => '');
+        const challenge = looksLikeChallengePage({
+          headers: response.headers(),
+          html: earlyHtml
+        });
+
+        if (challenge) {
+          console.error(`❌ [TOOLS] Challenge page served with HTTP ${status}`);
+
+          throw pageAccessError({
+            status: status || 403,
+            headers: response.headers(),
+            html: earlyHtml,
+            url: finalUrl || url
+          });
+        }
         
         // Wait for any dynamic content
         console.log('⏳ [TOOLS] Waiting for dynamic content...');
@@ -496,6 +546,25 @@ export class CrawlerTools {
     } catch (error) {
       console.error(`Navigation error for ${url}:`, error);
       this.visited.add(url); // Mark as visited even if failed
+
+      /*
+       * A page that refused us is not a page with no forms.
+       *
+       * This catch returns empty HTML for any navigation problem, which lets
+       * a crawl continue past one bad page -- reasonable for a crawl, and
+       * wrong for the single-page scan that has nothing else to look at. The
+       * detection above correctly identified aa.com as blocked by Akamai and
+       * then this swallowed it: the scan carried on with zero characters of
+       * HTML, found no forms in them, and reported "Scan completed - no
+       * forms found".
+       *
+       * Rethrown so the one case where we know the page was unreadable
+       * reaches the user as a reason instead of an empty result.
+       */
+      if (error.pageAccess) {
+        throw error;
+      }
+
       return {
         html: '',
         links: [],

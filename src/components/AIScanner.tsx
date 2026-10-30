@@ -107,6 +107,22 @@ const SLOW_POLL_AFTER_POLLS = 15;
 const POLL_RETRY_DELAYS_MS = [2000, 5000, 10_000, 20_000];
 const MAX_POLL_RETRIES = 6;
 
+/**
+ * Headings for failures that are the target's doing, not ours.
+ *
+ * "Error Occurred" over a bot-detection block reads as a fault in the
+ * scanner, which sends someone looking for a problem on the wrong side.
+ */
+const PAGE_ACCESS_HEADINGS: Record<string, string> = {
+  'bot-protected': 'Blocked by bot protection',
+  forbidden: 'The site refused the request',
+  unauthorized: 'That page requires sign-in',
+  'not-found': 'That page does not exist',
+  'rate-limited': 'The site is rate limiting us',
+  'server-error': 'The site returned an error',
+  'load-failed': 'The page could not be read'
+};
+
 /** How the collapsed summary line names each way a scan can end. */
 const FINISHED_HEADLINES: Record<string, string> = {
   cancelled: 'Scan cancelled',
@@ -119,6 +135,12 @@ interface ScanJob {
   id: string;
   url: string;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'completed_with_errors' | 'cancelled';
+  /**
+   * Set when the target refused the request rather than when anything of
+   * ours broke, so the failure can be described as the site's restriction
+   * instead of an unexplained error.
+   */
+  errorKind?: string;
   progress: number;
   currentStep: string;
   results?: ScanResults;
@@ -1578,13 +1600,30 @@ export const AIScanner = () => {
 
               {currentJob.error && (
                 <div className="bg-destructive/10 p-4 rounded-lg border border-destructive/30 text-left mb-6">
-                  <h4 className="font-semibold text-destructive mb-2">Scan failed</h4>
+                  {/*
+                    The panel a failed scan actually reaches. 'failed' is a
+                    terminal status, so the progress card and its own error
+                    block are already gone by the time there is an error to
+                    show -- which is why the first version of this fix
+                    changed the wrong one of the two and nothing happened.
+                  */}
+                  <h4 className="font-semibold text-destructive mb-2">
+                    {PAGE_ACCESS_HEADINGS[currentJob.errorKind ?? ''] ?? 'Scan failed'}
+                  </h4>
                   <p className="text-destructive text-sm">{currentJob.error}</p>
-                  {!currentJob.devMode && (
+                  {currentJob.errorKind ? (
                     <p className="text-muted-foreground text-xs mt-3">
-                      No API keys yet? Switch the header toggle to Dev Mode to walk the
-                      entire flow on sample data &mdash; no keys required.
+                      Nothing is wrong with your setup, and this says nothing about the
+                      page's forms &mdash; there was simply no page to read. Try a URL that
+                      is not behind the block.
                     </p>
+                  ) : (
+                    !currentJob.devMode && (
+                      <p className="text-muted-foreground text-xs mt-3">
+                        No API keys yet? Switch the header toggle to Dev Mode to walk the
+                        entire flow on sample data &mdash; no keys required.
+                      </p>
+                    )
                   )}
                 </div>
               )}
@@ -1711,13 +1750,30 @@ export const AIScanner = () => {
                 {/* Error Display */}
                 {currentJob.error && (
                   <div className="bg-red-500/20 backdrop-blur-sm p-4 rounded-lg border border-red-500/30 text-left">
-                    <h4 className="font-semibold text-red-600 mb-2">Error Occurred</h4>
+                    <h4 className="font-semibold text-red-600 mb-2">
+                      {PAGE_ACCESS_HEADINGS[currentJob.errorKind ?? ''] ?? 'Error Occurred'}
+                    </h4>
                     <p className="text-red-500 text-sm">{currentJob.error}</p>
-                    {!currentJob.devMode && (
+                    {/*
+                      The follow-up depends on whose problem it was. This used
+                      to offer "no API keys yet? try Dev Mode" for every
+                      failure, which is irrelevant advice when the truth is
+                      that the site refused the request -- and it quietly
+                      implies the scan failed because of our configuration.
+                    */}
+                    {currentJob.errorKind ? (
                       <p className="text-muted-foreground text-xs mt-3">
-                        No API keys yet? Switch the header toggle to Dev Mode to walk the
-                        entire flow on sample data &mdash; no keys required.
+                        Nothing is wrong with your setup, and this says nothing about the
+                        page's forms &mdash; there was simply no page to read. Try a URL
+                        that is not behind the block.
                       </p>
+                    ) : (
+                      !currentJob.devMode && (
+                        <p className="text-muted-foreground text-xs mt-3">
+                          No API keys yet? Switch the header toggle to Dev Mode to walk the
+                          entire flow on sample data &mdash; no keys required.
+                        </p>
+                      )
                     )}
                   </div>
                 )}

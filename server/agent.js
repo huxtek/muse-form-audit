@@ -2039,12 +2039,19 @@ Focus on AI agent needs: name attributes, field identification, form submission 
       }
 
       console.error(`❌ Per-form scan failed:`, error);
-      
+
+      // `pageAccess` is attached when the target refused the request rather
+      // than when anything of ours broke. Carried through so the interface
+      // can say which, instead of offering advice about our API keys for a
+      // site that simply would not let us in.
       this.updateProgress({
         status: 'failed',
         progress: 0,
-        currentStep: 'Per-form scan failed',
-        error: error.message
+        currentStep: error.pageAccess
+          ? `Could not read the page (HTTP ${error.pageAccess.status})`
+          : 'Per-form scan failed',
+        error: error.message,
+        ...(error.pageAccess ? { errorKind: error.pageAccess.kind } : {})
       });
       
       this.isRunning = false;
