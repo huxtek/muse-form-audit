@@ -97,9 +97,10 @@ export const scanLimiter = rateLimit({
  * These need their own, much larger allowance because their cost is not the
  * client's choice. The UI polls a running scan every couple of seconds, so
  * the number of reads is set by how long the scan takes -- and a scan that
- * waits out a model outage can run for minutes. One 133-second scan of
- * swabiz.com spent 66 of the general limiter's 100 requests, so a second
- * slow scan locked the operator out of their own instance mid-report.
+ * waits out a model outage can run for minutes. One measured 133-second
+ * scan spent 66 of the general limiter's 100 requests on its own progress,
+ * so a second slow scan locked the operator out of their own instance
+ * mid-report.
  *
  * Still bounded: a read is cheap but not free, and an unmetered endpoint on
  * an unauthenticated server is how someone else's bandwidth bill grows.

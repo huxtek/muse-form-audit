@@ -93,10 +93,10 @@ const TERMINAL_STATUSES = ['cancelled', 'completed', 'completed_with_errors', 'f
  *
  * Two seconds while there is something to watch, then slower once the scan
  * is plainly in a long wait. A scan that waits out a model outage can run
- * for minutes, and at a flat two seconds a 133-second scan of swabiz.com
- * spent 66 requests -- two of those locked the operator out of their own
- * instance against a 100-request budget. The WebSocket carries the
- * interesting updates anyway; this is the backup for when it does not.
+ * for minutes, and at a flat two seconds a measured 133-second scan spent
+ * 66 requests -- two of those locked the operator out of their own instance
+ * against a 100-request budget. The WebSocket carries the interesting
+ * updates anyway; this is the backup for when it does not.
  */
 const POLL_INTERVAL_MS = 2000;
 const SLOW_POLL_INTERVAL_MS = 5000;
