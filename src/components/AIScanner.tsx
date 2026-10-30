@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Bot, Scan, AlertTriangle, CheckCircle, ChevronRight, CircleSlash, Clock, Loader2, Zap, Globe, FileText, FlaskConical, Sparkles, Eye } from "lucide-react";
+import { Bot, Scan, AlertTriangle, CheckCircle, ChevronRight, CircleSlash, Clock, Loader2, MinusCircle, Zap, Globe, FileText, FlaskConical, Sparkles, Eye } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useDevMode } from "@/contexts/DevModeContext";
@@ -345,10 +345,21 @@ export const AIScanner = () => {
                 formsFound: update.formsCount || 0
               }));
               
-              toast({
-                title: "Forms Discovered",
-                description: `Found ${update.formsCount} forms on the page. Starting individual analysis...`,
-              });
+              // A page with no form announced "Forms Discovered -- Found 0
+              // forms. Starting individual analysis...", which promises
+              // work that cannot happen. Counted properly, and singular
+              // when there is one.
+              toast(
+                update.formsCount
+                  ? {
+                      title: 'Forms Discovered',
+                      description: `Found ${update.formsCount} form${update.formsCount === 1 ? '' : 's'} on the page. Starting individual analysis...`
+                    }
+                  : {
+                      title: 'No forms found',
+                      description: 'This page has no form elements to analyse.'
+                    }
+              );
             }
             
             if (update.type === 'form_analyzed') {
@@ -800,7 +811,18 @@ export const AIScanner = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-          {SEVERITY_ORDER.every((severity) => counts[severity] === 0) ? (
+          {forms.length === 0 ? (
+            /*
+             * "No issues found" would be a clean bill of health for a page
+             * nothing was checked on. A scan of MDN's documentation *about*
+             * forms finds no form element, and the badge read as though the
+             * page had passed an audit it never had.
+             */
+            <Badge variant="outline" className="text-xs text-muted-foreground">
+              <MinusCircle className="h-3 w-3 mr-1" />
+              Nothing to check
+            </Badge>
+          ) : SEVERITY_ORDER.every((severity) => counts[severity] === 0) ? (
             <Badge variant="outline" className="text-xs">
               <CheckCircle className="h-3 w-3 mr-1" />
               {/* Not "no field-level issues" any more: this now counts
@@ -1490,7 +1512,13 @@ export const AIScanner = () => {
                 modelLabel={currentJob.modelLabel}
                 isSampleRun={isSampleRun}
                 analyser={reportAnalyser}
-                onDownload={currentJob.results ? downloadReport : undefined}
+                /*
+                 * Offered only when there is a form in the report. A
+                 * zero-form scan has results -- a page was fetched, a
+                 * summary written -- but a PDF of it is a cover sheet and
+                 * empty sections, which is worse than no button.
+                 */
+                onDownload={reportForms.length > 0 ? downloadReport : undefined}
                 onNewScan={resetScan}
               />
 

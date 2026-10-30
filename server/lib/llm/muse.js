@@ -266,7 +266,21 @@ export function createMuseProvider({
   model = readEnvValue('MUSE_MODEL', MUSE_DEFAULT_MODEL),
   endpoint = readEnvValue('MUSE_ENDPOINT', MUSE_ENDPOINT),
   reasoningEffort = readEnvValue('MUSE_REASONING_EFFORT', 'low'),
-  timeoutMs = Number(readEnvValue('MODEL_TIMEOUT_MS', '120000')),
+  /**
+   * Deadline for one attempt.
+   *
+   * 75s, set against measurement: eleven real analysis calls with the full
+   * prompt and a screenshot ran 15.9s to 50.3s, median 28.7s. 75s clears
+   * the slowest by half again.
+   *
+   * It used to be 120s, which was longer than the whole retry budget, so a
+   * call that timed out could never be retried -- the first attempt had
+   * already overrun the budget before a second could start. One real scan
+   * spent 120s on a single attempt and fell back to rule-based scoring with
+   * nothing in the log to explain why. Cutting the per-attempt deadline is
+   * what makes a retry possible at all.
+   */
+  timeoutMs = Number(readEnvValue('MODEL_TIMEOUT_MS', '75000')),
   /**
    * How long to keep trying before giving up on the model entirely.
    *
@@ -277,20 +291,32 @@ export function createMuseProvider({
    * refusals with a run of 3, while 24 attempts spaced a second apart gave
    * zero across both models.
    *
-   * So the budget is a minute and the gap is seconds. A scan during a bad
-   * patch takes longer; the alternative is a fast report scored by rules,
-   * which finds no field-level issues at all and leaves the annotated
-   * screenshot empty.
+   * So the gap is seconds. The budget is 180s, which is the smallest figure
+   * that fits two full-length attempts: 75s, a 2s gap, 75s. At 60s it fit
+   * only one, which made the timeout retry unreachable no matter how the
+   * call failed.
+   *
+   * A scan during a bad patch takes longer; the alternative is a fast report
+   * scored by rules, which finds no field-level issues at all and leaves the
+   * annotated screenshot empty.
    *
    * An earlier version made five attempts 200ms apart, which is exactly the
    * wrong shape: a real scan burned all ten attempts across two models in
    * six seconds and still fell back.
    */
-  retryBudgetMs = Number(readEnvValue('MUSE_RETRY_BUDGET_MS', '60000')),
+  retryBudgetMs = Number(readEnvValue('MUSE_RETRY_BUDGET_MS', '180000')),
   /** Gap between attempts. Seconds, because spacing is what works. */
   retryDelayMs = Number(readEnvValue('MUSE_RETRY_DELAY_MS', '2000')),
-  /** Hard ceiling, so a tiny delay cannot turn the budget into a hot loop. */
-  maxAttempts = Number(readEnvValue('MUSE_MAX_ATTEMPTS', '40')),
+  /**
+   * Hard ceiling on requests, which is what actually bounds a refusal burst.
+   *
+   * Refusals come back in a few hundred milliseconds, so they barely touch
+   * the time budget -- 180s of budget at a 2s gap would allow about 85
+   * requests. 30 keeps the spaced retrying at roughly the 60s that has been
+   * in force, rather than tripling our request volume against an API whose
+   * failures nobody understands yet.
+   */
+  maxAttempts = Number(readEnvValue('MUSE_MAX_ATTEMPTS', '30')),
   /**
    * Stand-ins, tried in order once the preferred model is exhausted.
    *

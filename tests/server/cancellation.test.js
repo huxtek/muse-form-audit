@@ -251,6 +251,34 @@ describe('a cancelled scan cannot report anything else', () => {
   });
 });
 
+/**
+ * The retry configuration has to be internally consistent or one of its
+ * settings is dead.
+ *
+ * With a per-attempt deadline at or above the whole budget, a call that
+ * times out can never be retried: the first attempt overruns the budget
+ * before a second can start. That shipped, and cost a real scan its
+ * model-written report after a single 120s attempt against a 60s budget.
+ */
+describe('the retry budget leaves room for a retry', () => {
+  it('fits at least two full-length attempts', async () => {
+    const timeout = Number(process.env.MODEL_TIMEOUT_MS ?? 75_000);
+    const budget = Number(process.env.MUSE_RETRY_BUDGET_MS ?? 180_000);
+    const gap = Number(process.env.MUSE_RETRY_DELAY_MS ?? 2_000);
+
+    expect(timeout + gap + timeout).toBeLessThanOrEqual(budget);
+  });
+
+  it('bounds the requests a refusal burst can make', async () => {
+    // Refusals return in a few hundred milliseconds, so the time budget
+    // barely constrains them and the attempt ceiling is what does.
+    const maxAttempts = Number(process.env.MUSE_MAX_ATTEMPTS ?? 30);
+
+    expect(maxAttempts).toBeGreaterThan(1);
+    expect(maxAttempts).toBeLessThanOrEqual(40);
+  });
+});
+
 describe('a cancelled job is housekept like any other finished one', () => {
   it('counts as terminal, so the sweep can release it', async () => {
     // Left out of the terminal set, every cancelled job and its screenshot

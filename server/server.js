@@ -142,7 +142,16 @@ const realScansEnabled = String(process.env.ENABLE_REAL_SCANS ?? 'true').toLower
  */
 const retention = getRetentionConfig();
 const jobSweep = setInterval(() => {
-  const evicted = sweepJobs(jobs, { ...retention, onEvict: deleteJobScreenshots });
+  const evicted = sweepJobs(jobs, {
+    ...retention,
+    onEvict: (jobId) => {
+      deleteJobScreenshots(jobId);
+      // Belt to the `.finally` braces below. An agent whose promise never
+      // settles would otherwise be held forever, and the sweep is the one
+      // thing guaranteed to run.
+      agents.delete(jobId);
+    }
+  });
 
   if (evicted.length > 0) {
     console.log(`Job sweep released ${evicted.length} job(s); ${jobs.size} retained`);
@@ -706,6 +715,23 @@ app.post('/api/scan', scanLimiter, validateURLMiddleware, async (req, res) => {
         status: 'failed',
         error: IS_PRODUCTION ? 'Scan failed' : error.message
       });
+    }).finally(() => {
+      /*
+       * Released when the scan settles, however it settled.
+       *
+       * The map only existed so a running scan could be found and
+       * cancelled, but nothing removed a finished one: `agents.delete` was
+       * called on cancel and on DELETE /api/job and nowhere else. Seven
+       * completed scans left seven agents in memory, each holding its
+       * crawler tools and conversation history, and the job sweep cleared
+       * the records and screenshots while leaving those behind. On a 512MB
+       * instance that is the kind of leak that ends a demo.
+       *
+       * Safe against cancel, which deletes the same key: Map.delete on a
+       * missing key is a no-op, and a finished job is refused by the cancel
+       * route before it ever looks the agent up.
+       */
+      agents.delete(jobId);
     });
 
     res.json({
