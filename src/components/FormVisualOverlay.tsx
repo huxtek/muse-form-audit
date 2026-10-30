@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle, FlaskConical, ImageOff } from "lucide-react";
 import { getScreenshotUrl } from "@/lib/api-config";
 import { SEVERITY_ORDER, SEVERITY_STYLES } from "@/defines/severities";
+import { describeFormPurpose } from "@/lib/form-purpose";
 import type { AnalyzedForm, FieldIssue, IssueSeverity, VisualField } from "@/lib/scan-types";
 
 /** Boxes below this width get their badge placed outside, so it stays legible. */
@@ -239,7 +240,7 @@ export const FormVisualOverlay = ({
           </p>
           <p className="text-muted-foreground">
             {notRendered
-              ? `It is in the markup but generates nothing on screen as the page loads${
+              ? `This is ${describeFormPurpose(form)}. It is in the markup but generates nothing on screen as the page loads${
                   concealment ? ` (${concealment.reason} on ${concealment.at})` : ""
                 }, so there is nothing to photograph. It is still scored: an agent has to understand a form whether or not a person can see it.`
               : visual?.unavailableReason

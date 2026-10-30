@@ -225,7 +225,7 @@ describe('report visual tab', () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '4' }));
+      fireEvent.click(screen.getByRole('button', { name: /^Form 4/ }));
     });
 
     expect(screen.getByRole('heading', { name: 'Form 4' })).toBeInTheDocument();
@@ -239,8 +239,14 @@ describe('report visual tab', () => {
       summary: { totalPages: 1, totalForms: 4 }
     });
 
-    expect(screen.getByRole('button', { name: '1' })).toHaveAttribute('aria-current', 'true');
-    expect(screen.getByRole('button', { name: '2' })).toHaveAttribute('aria-current', 'false');
+    expect(screen.getByRole('button', { name: /^Form 1/ })).toHaveAttribute(
+      'aria-current',
+      'true'
+    );
+    expect(screen.getByRole('button', { name: /^Form 2/ })).toHaveAttribute(
+      'aria-current',
+      'false'
+    );
   });
 
   it('labels each form with its own score and identifier', async () => {
@@ -699,5 +705,129 @@ describe('report finding totals agree', () => {
     // Scoped to the strip's own badge: "field-level" is still the right
     // wording in the per-form overlay, which genuinely shows only those.
     expect(stripBadge('No issues found')).toBeInTheDocument();
+  });
+});
+
+/**
+ * Reaching a form should not require finding it on a photograph first.
+ *
+ * The picker was shown only when a crawl spanned several pages, on the
+ * reasoning that the page map is itself a picker. It is, for a form you can
+ * already see -- and after the map stopped inventing positions for forms
+ * that are not rendered, those forms had no outline to click and became
+ * unreachable in the visual tab.
+ *
+ * united.com is the case: two forms, one of them a co-browse support widget
+ * behind `display:none`, whose tab is now the only route to it.
+ */
+const PAGE_MAP = { pageIndex: 0, width: 1280, height: 1563 };
+
+const mappedForm = (overrides: Partial<AnalyzedForm> = {}): AnalyzedForm =>
+  form({
+    formId: 'bookFlightForm',
+    accessibility: { score: 59, fieldIssues: [] },
+    visual: {
+      visualIndex: 0,
+      width: 552,
+      height: 460,
+      hasScreenshot: true,
+      fields: [],
+      pageRect: { x: 96, y: 225, width: 520, height: 428 },
+      pageMap: PAGE_MAP
+    },
+    ...overrides
+  });
+
+const hiddenMappedForm = (): AnalyzedForm =>
+  form({
+    formId: 'form-1',
+    accessibility: { score: 71, fieldIssues: [] },
+    fields: [
+      { id: '22437b90', name: 'cobrowse.pin', type: 'text' },
+      { id: 'field-1', name: '', type: 'submit' }
+    ],
+    visual: {
+      visualIndex: 1,
+      width: 0,
+      height: 0,
+      hasScreenshot: false,
+      notRendered: true,
+      concealment: { reason: 'display:none', at: 'an ancestor <section>' },
+      unavailableReason: 'not rendered on the page as loaded (display:none on an ancestor <section>)',
+      fields: [],
+      pageRect: { x: 0, y: 0, width: 0, height: 0 },
+      pageMap: PAGE_MAP
+    }
+  });
+
+describe('choosing a form without hunting for it', () => {
+  it('offers a tab per form on a single-page scan with a map', async () => {
+    await renderReport({
+      forms: [mappedForm(), hiddenMappedForm()],
+      summary: { totalPages: 1, totalForms: 2 }
+    });
+
+    expect(screen.getByRole('button', { name: /^Form 1/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Form 2/ })).toBeInTheDocument();
+  });
+
+  it('marks the tab of a form that is not on the page', async () => {
+    // The surprising thing about that form, so it belongs on the tab.
+    await renderReport({
+      forms: [mappedForm(), hiddenMappedForm()],
+      summary: { totalPages: 1, totalForms: 2 }
+    });
+
+    expect(screen.getByRole('button', { name: /^Form 2 · hidden/ })).toBeInTheDocument();
+    // And only that one: the visible form must not be labelled hidden.
+    expect(screen.queryByRole('button', { name: /^Form 1 · hidden/ })).not.toBeInTheDocument();
+  });
+
+  it('carries each form score on its tab', async () => {
+    await renderReport({
+      forms: [mappedForm(), hiddenMappedForm()],
+      summary: { totalPages: 1, totalForms: 2 }
+    });
+
+    expect(screen.getByRole('button', { name: /^Form 1 · 59/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Form 2 · hidden · 71/ })).toBeInTheDocument();
+  });
+
+  it('opens the form whose tab was chosen', async () => {
+    await renderReport({
+      forms: [mappedForm(), hiddenMappedForm()],
+      summary: { totalPages: 1, totalForms: 2 }
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Form 2/ }));
+    });
+
+    expect(screen.getByRole('heading', { name: 'Form 2' })).toBeInTheDocument();
+  });
+
+  it('says what a hidden form is for when its tab is open', async () => {
+    // "Form 2" with no picture and no explanation told a reader nothing.
+    await renderReport({
+      forms: [mappedForm(), hiddenMappedForm()],
+      summary: { totalPages: 1, totalForms: 2 }
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Form 2/ }));
+    });
+
+    expect(screen.getByText(/this form is not shown on the page/i)).toBeInTheDocument();
+    expect(screen.getByText(/a form with 2 controls \(cobrowse\.pin\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/display:none on an ancestor <section>/i)).toBeInTheDocument();
+  });
+
+  it('keeps a single form free of a picker it does not need', async () => {
+    await renderReport({
+      forms: [mappedForm()],
+      summary: { totalPages: 1, totalForms: 1 }
+    });
+
+    expect(screen.queryByRole('button', { name: /^Form 1 ·/ })).not.toBeInTheDocument();
   });
 });

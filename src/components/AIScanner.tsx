@@ -17,7 +17,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Bot, Scan, AlertTriangle, CheckCircle, ChevronRight, CircleSlash, Clock, Loader2, MinusCircle, Zap, Globe, FileText, FlaskConical, Sparkles, Eye } from "lucide-react";
+import { Bot, Scan, AlertTriangle, CheckCircle, ChevronRight, CircleSlash, Clock, Loader2, MinusCircle, Zap, Globe, FileText, FlaskConical, Sparkles, Eye, EyeOff } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useDevMode } from "@/contexts/DevModeContext";
@@ -29,6 +29,7 @@ import {
   SCAN_DEMO_TARGET
 } from "@/lib/scan-url";
 import { normalizeTargetUrl } from "@/lib/target-url";
+import { formTabHint, isFormNotRendered } from "@/lib/form-purpose";
 import { useScanConfig } from "@/hooks/useScanConfig";
 import FormPreviewIllustration from "@/components/FormPreviewIllustration";
 import { formAPI } from "@/services/api";
@@ -903,19 +904,16 @@ export const AIScanner = () => {
     const index = Math.min(selectedFormIndex, forms.length - 1);
     const hasPageMap = forms.some((form) => form.visual?.pageMap);
 
-    // With a page map the map itself is the picker: the user sees the page
-    // they scanned and clicks the form they want.
+    // The map shows the page that was scanned, with each form outlined on it.
     if (hasPageMap) {
-      // The map only shows the selected form's page, so when a crawl spans
-      // several pages the map alone cannot reach every form. The numeric
-      // picker is what makes the rest reachable.
-      const pageCount = new Set(
-        forms.map((form) => form.visual?.pageMap?.pageIndex).filter((value) => value !== undefined)
-      ).size;
-
       return (
         <div className="space-y-5">
-          {pageCount > 1 && renderFormPicker(forms, index)}
+          {/* Shown for any multi-form scan, not just a multi-page crawl. The
+              map reaches a form only if that form has an outline on it, and a
+              form that is not rendered has none, so the picker is the only
+              route to those -- and hunting for an outline on a screenshot of
+              a whole page is work even when there is one. */}
+          {forms.length > 1 && renderFormPicker(forms, index)}
 
           <PageMapView
             forms={forms}
@@ -945,27 +943,68 @@ export const AIScanner = () => {
     );
   };
 
+  /**
+   * One tab per form, so a form can be chosen by name instead of hunted for.
+   *
+   * Previously shown only when a crawl spanned several pages, on the
+   * reasoning that the page map is itself a picker. It is, for a form you can
+   * already see: reaching a form meant finding its outline on a screenshot of
+   * the whole page first. A form that is not rendered has no outline at all,
+   * so after the map stopped inventing positions for those, they became
+   * unreachable in the visual tab entirely.
+   *
+   * Each tab carries what distinguishes the form -- whether it is hidden,
+   * what kind it is, what it scored -- because "1 2 3" tells a reader nothing
+   * about which one they want. Selecting a tab scrolls the page map to that
+   * form, which the map already did for its own clicks.
+   */
   const renderFormPicker = (forms: ScanResults['forms'], index: number) => (
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-sm text-muted-foreground mr-1">
         Form {index + 1} of {forms.length}
       </span>
 
-      {forms.map((form, formIndex) => (
-        <button
-          key={`pick-${form.formId || 'form'}-${formIndex}`}
-          type="button"
-          aria-current={formIndex === index}
-          onClick={() => handleSelectForm(formIndex)}
-          className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
-            formIndex === index
-              ? 'bg-sky-600 border-sky-600 text-white'
-              : 'bg-muted/40 border-border/50 text-muted-foreground hover:bg-muted/70'
-          }`}
-        >
-          {formIndex + 1}
-        </button>
-      ))}
+      {forms.map((form, formIndex) => {
+        const hint = formTabHint(form);
+        const current = formIndex === index;
+        /*
+         * Labelled explicitly, because the accessible name computed from the
+         * children trims each one before joining them: the tab announced
+         * itself as "Form 2· hidden· 71".
+         */
+        const label = [
+          `Form ${formIndex + 1}`,
+          hint,
+          typeof form.accessibility?.score === 'number' ? `${form.accessibility.score}` : null
+        ]
+          .filter(Boolean)
+          .join(' · ');
+
+        return (
+          <button
+            key={`pick-${form.formId || 'form'}-${formIndex}`}
+            type="button"
+            aria-label={label}
+            aria-current={current}
+            onClick={() => handleSelectForm(formIndex)}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+              current
+                ? 'bg-sky-600 border-sky-600 text-white'
+                : 'bg-muted/40 border-border/50 text-muted-foreground hover:bg-muted/70'
+            }`}
+          >
+            {isFormNotRendered(form) && <EyeOff className="h-3 w-3" />}
+            {/* Spaces are explicit: JSX drops the whitespace between an
+                expression and the next element, which made the accessible
+                name read "Form 2· hidden· 71". */}
+            <span>{`Form ${formIndex + 1}`}</span>
+            {hint && <span className="font-normal opacity-80">{` · ${hint}`}</span>}
+            {typeof form.accessibility?.score === 'number' && (
+              <span className="font-normal opacity-80">{` · ${form.accessibility.score}`}</span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 
