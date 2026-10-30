@@ -1,12 +1,14 @@
-import dotenv from 'dotenv';
+// First, and it has to stay first: every module below may read process.env
+// while it is being evaluated, and ESM evaluates them all before any
+// statement in this file. See lib/loadEnv.js.
+import './lib/loadEnv.js';
+
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 import express from 'express';
 import cors from 'cors';
