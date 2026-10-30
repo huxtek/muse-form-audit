@@ -153,3 +153,66 @@ describe('the error the scan throws', () => {
     expect(error.message).toBe(error.pageAccess.message);
   });
 });
+
+/**
+ * A challenge page does not have to arrive with an error status.
+ *
+ * amazon.com answers HTTP 202 with one. The challenge detector identified it
+ * -- the scan log said "Challenge page served with HTTP 202" -- and the
+ * description then fell through to the generic branch, so the user was told
+ * "www.amazon.com returned HTTP 202, so the page could not be scanned": a
+ * status code standing in for an explanation.
+ */
+const AMAZON_202 = {
+  status: 202,
+  url: 'https://www.amazon.com/',
+  headers: { 'set-cookie': ['__cf_bm=abc; path=/; secure'] },
+  html: '<html><head><title>Robot Check</title></head><body>Just a moment...</body></html>'
+};
+
+describe('a challenge served with a non-error status', () => {
+  it('is reported as bot protection rather than a bare status code', async () => {
+    const described = describeLoadFailure(AMAZON_202);
+
+    expect(described.kind).toBe('bot-protected');
+    expect(described.message).toMatch(/bot detection/i);
+    expect(described.message).not.toMatch(/^www\.amazon\.com returned HTTP 202/);
+  });
+
+  it('names the vendor and keeps the status', async () => {
+    const described = describeLoadFailure(AMAZON_202);
+
+    expect(described.vendor).toBe('Cloudflare');
+    expect(described.status).toBe(202);
+    expect(described.message).toContain('HTTP 202');
+  });
+
+  it('says it is the site, not the scanner', async () => {
+    expect(describeLoadFailure(AMAZON_202).message).toMatch(
+      /not a problem with the page's forms/i
+    );
+  });
+
+  it('still calls a refusal a refusal', async () => {
+    // aa.com answers 403 with an Access Denied body. That is a refusal, not
+    // a challenge, and describing it as one would be less accurate.
+    const described = describeLoadFailure(AA_COM);
+
+    expect(described.kind).toBe('bot-protected');
+    expect(described.message).toMatch(/refused the request/i);
+    expect(described.message).not.toMatch(/challenge/i);
+  });
+
+  it('leaves a readable page with a vendor cookie alone', async () => {
+    // The guard that stops this branch swallowing real pages: a page with
+    // fields is a page, whoever is in front of it.
+    const described = describeLoadFailure({
+      status: 200,
+      url: 'https://example.com/contact',
+      headers: { 'set-cookie': ['__cf_bm=abc; path=/'] },
+      html: `<html><body><form><input name="email"><button>Send</button></form>${'x'.repeat(5000)}</body></html>`
+    });
+
+    expect(described.kind).not.toBe('bot-protected');
+  });
+});

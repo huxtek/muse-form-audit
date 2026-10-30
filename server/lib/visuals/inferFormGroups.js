@@ -124,6 +124,24 @@ function wrapOrphanFieldGroups(limits, markerAttribute) {
       }
 
       if (countOrphansIn(node) >= 2) {
+        /*
+         * A container holding a `<form>` cannot become one.
+         *
+         * Wrapping it would put that form inside ours, and nested forms are
+         * illegal HTML: the parser collapses one, so the live DOM ends up
+         * with more forms than the serialised HTML and the geometry pairing
+         * breaks by index. Measured on en.wikipedia.org, where the DOM
+         * reported 7 forms against 6 in the parsed HTML and three forms lost
+         * their overlays.
+         *
+         * Walking further up cannot help, since every ancestor above this
+         * one contains the same form. Returning null instead sends the field
+         * to the solitary-field path below, which groups it tightly.
+         */
+        if (node.querySelector('form')) {
+          return null;
+        }
+
         // Too broad to be one form: page furniture that happens to contain
         // several unrelated inputs.
         return node.querySelectorAll(FIELD_SELECTOR).length <= limits.maxFieldsPerGroup
@@ -168,8 +186,11 @@ function wrapOrphanFieldGroups(limits, markerAttribute) {
     }
 
     const parent = field.parentElement;
-    const solitary =
-      parent && parent.querySelectorAll(FIELD_SELECTOR).length === 1 ? parent : field;
+    const usableParent =
+      parent &&
+      parent.querySelectorAll(FIELD_SELECTOR).length === 1 &&
+      !parent.querySelector('form');
+    const solitary = usableParent ? parent : field;
 
     if (!tightest.includes(solitary)) {
       tightest.push(solitary);
@@ -183,15 +204,26 @@ function wrapOrphanFieldGroups(limits, markerAttribute) {
       break;
     }
 
-    const fieldCount = root.querySelectorAll(FIELD_SELECTOR).length;
+    /*
+     * The root can be a field itself, from the solitary-field path above,
+     * and a field has no descendants to count. Counting only descendants
+     * scored those roots as zero and skipped them, so a lone field was
+     * found, chosen, and then silently dropped. Rare until containers
+     * holding a form started being rejected, which sends fields down this
+     * path routinely.
+     */
+    const fieldCount = root.matches(FIELD_SELECTOR)
+      ? 1
+      : root.querySelectorAll(FIELD_SELECTOR).length;
 
     if (fieldCount === 0 || fieldCount > limits.maxFieldsPerGroup) {
       continue;
     }
 
-    // A root already inside something we wrapped would produce nested forms,
-    // which is invalid HTML and would confuse the extractor.
-    if (root.closest('form')) {
+    // Nested forms either way round: a root inside a form, or a root holding
+    // one. Both are invalid HTML, and the second is what cost three forms
+    // their overlays on en.wikipedia.org.
+    if (root.closest('form') || root.querySelector('form')) {
       continue;
     }
 

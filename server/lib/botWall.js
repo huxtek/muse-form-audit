@@ -130,6 +130,7 @@ export function describeLoadFailure({ status, headers = {}, html = '', url = '' 
     }
   })();
 
+  // A refusal, which is what aa.com does: 403 with an Access Denied body.
   if (wall && (status === 403 || status === 401 || status === 429 || status >= 500)) {
     return {
       kind: 'bot-protected',
@@ -140,6 +141,30 @@ export function describeLoadFailure({ status, headers = {}, html = '', url = '' 
         `with HTTP ${status}, so there was no page to scan. This is a restriction on ` +
         `${site}'s side, not a problem with the page's forms. Try a page that does not ` +
         `sit behind the protection, or a different site.`
+    };
+  }
+
+  /*
+   * Not a refusal, still bot protection.
+   *
+   * The statuses above are the refusals, and amazon.com does not refuse: it
+   * answers HTTP 202 with a challenge page. The detector identified it
+   * correctly and this fell through to the generic branch anyway, so the user
+   * was told "amazon.com returned HTTP 202, so the page could not be
+   * scanned" -- a status code where an explanation belongs. Checked after the
+   * refusals so a 403 is still described as a refusal rather than a
+   * challenge, which is what it is.
+   */
+  if (wall && looksLikeChallengePage({ headers, html })) {
+    return {
+      kind: 'bot-protected',
+      vendor: wall.vendor,
+      status,
+      message:
+        `${site} is protected by bot detection (${wall.vendor}) and served a challenge ` +
+        `page instead of the page itself (HTTP ${status}), so there was no page to scan. ` +
+        `This is a restriction on ${site}'s side, not a problem with the page's forms. ` +
+        `Try a page that does not sit behind the protection, or a different site.`
     };
   }
 

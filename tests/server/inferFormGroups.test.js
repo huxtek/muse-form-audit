@@ -212,3 +212,150 @@ describe('failing safely', () => {
     expect(result).toEqual({ groups: [], orphansFound: 0 });
   });
 });
+
+/**
+ * Never create a nested form.
+ *
+ * Measured on en.wikipedia.org/wiki/Form_(HTML): the appearance panel holds
+ * radio groups that already sit inside a form, plus a few fields that do
+ * not. The nearest ancestor shared by those loose fields contained that
+ * form, so wrapping it put a form inside a form.
+ *
+ * Nested forms are illegal HTML, so the parser collapses one. The live DOM
+ * reported 7 forms where `cheerio` parsed 6 from the same markup, the
+ * geometry pairing broke by index, and three forms lost their overlays --
+ * including `vector-sticky-search-form`, a hidden form of exactly the kind
+ * the report now labels.
+ *
+ * Walking further up cannot help: every ancestor above also contains the
+ * form. The candidate has to be rejected and the fields grouped tightly.
+ */
+const nestedForms = () => document.querySelectorAll('form form').length;
+
+describe('containers that already hold a form', () => {
+  it('does not wrap a container holding a form', async () => {
+    await run(`
+      <div id="panel">
+        <form id="declared">
+          <input type="radio" name="theme" value="light">
+          <input type="radio" name="theme" value="dark">
+        </form>
+        <input name="loose-a">
+        <input name="loose-b">
+      </div>
+    `);
+
+    expect(nestedForms()).toBe(0);
+    expect(document.getElementById('declared').closest('form').id).toBe('declared');
+  });
+
+  it('still reports the loose fields rather than dropping them', async () => {
+    // Rejecting the container must not lose the fields it held: they are
+    // what inference exists to find.
+    await run(`
+      <div id="panel">
+        <form id="declared"><input name="inside"></form>
+        <input name="loose-a">
+        <input name="loose-b">
+      </div>
+    `);
+
+    const grouped = inferredForms().flatMap((form) => [
+      ...form.querySelectorAll('input')
+    ].map((i) => i.getAttribute('name')));
+
+    expect(grouped).toContain('loose-a');
+    expect(grouped).toContain('loose-b');
+  });
+
+  it('leaves the DOM form count equal to what a parser would read', async () => {
+    /*
+     * The property that actually broke. The geometry pass counts forms in
+     * the live DOM and the extractor counts them in the serialised HTML; a
+     * nested form makes those two numbers differ, and everything downstream
+     * pairs them by index.
+     */
+    await run(`
+      <div id="panel">
+        <form id="declared"><input name="inside"></form>
+        <input name="loose-a">
+        <input name="loose-b">
+      </div>
+    `);
+
+    const liveCount = document.querySelectorAll('form').length;
+    const reparsed = new DOMParser()
+      .parseFromString(`<body>${document.body.innerHTML}</body>`, 'text/html')
+      .querySelectorAll('form').length;
+
+    expect(liveCount).toBe(reparsed);
+  });
+
+  it('wraps a container that holds no form, as before', async () => {
+    // The Instagram shape must keep working: loose fields sharing a
+    // container with no form in it are still one group.
+    const result = await run(`
+      <div id="signup">
+        <input name="fullname">
+        <input name="username">
+        <input type="password" name="pass">
+      </div>
+    `);
+
+    expect(result.groups).toHaveLength(1);
+    expect(nestedForms()).toBe(0);
+    expect(fieldsPerForm()).toEqual([3]);
+  });
+
+  it('does not use a solitary field parent that holds a form', async () => {
+    // The fallback path has the same trap: a parent with one field can still
+    // contain an empty form.
+    await run(`
+      <div id="outer">
+        <div id="holder">
+          <form id="empty"></form>
+          <input name="only">
+        </div>
+        <input name="other">
+      </div>
+    `);
+
+    expect(nestedForms()).toBe(0);
+  });
+});
+
+describe('a field chosen on its own', () => {
+  it('is wrapped rather than counted as empty and dropped', async () => {
+    /*
+     * The field count was taken from descendants, and a field has none, so a
+     * root that was the field itself scored zero and hit the "nothing here"
+     * guard. The field was found, chosen, and then silently discarded.
+     *
+     * Reached whenever a field's only shared ancestor is rejected, which the
+     * form-nesting guard now does routinely.
+     */
+    await run(`
+      <div id="panel">
+        <form id="declared"><input name="inside"></form>
+        <input name="alone">
+        <input name="also-alone">
+      </div>
+    `);
+
+    const wrapped = inferredForms().map((form) =>
+      [...form.querySelectorAll('input')].map((i) => i.getAttribute('name')).join(',')
+    );
+
+    expect(wrapped).toEqual(['alone', 'also-alone']);
+  });
+
+  it('counts the field itself against the group limit', async () => {
+    // A limit of zero should reject it, which only works if it counts as one.
+    const result = await run(
+      `<div id="panel"><form id="d"><input name="in"></form><input name="a"><input name="b"></div>`,
+      { ...INFERENCE_LIMITS, maxFieldsPerGroup: 0 }
+    );
+
+    expect(result.groups).toHaveLength(0);
+  });
+});
