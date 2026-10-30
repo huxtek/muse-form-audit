@@ -14,6 +14,16 @@ import {
   inferFormGroups
 } from './lib/visuals/inferFormGroups.js';
 import { looksLikeChallengePage, pageAccessError } from './lib/botWall.js';
+import {
+  CONTENT_SETTLE_MS,
+  FIELD_SELECTOR,
+  FIELD_WAIT_MS,
+  isUsableDom,
+  measureReadiness,
+  NAVIGATION_TIMEOUT_MS,
+  NAVIGATION_WAIT_UNTIL,
+  pageUnreadableError
+} from './lib/pageReadiness.js';
 
 /**
  * AI Tools for comprehensive website crawling and form analysis
@@ -188,9 +198,9 @@ export class CrawlerTools {
       const page = await this.browser.newPage();
       
       try {
-        const response = await page.goto(sitemapUrl, { 
-          waitUntil: 'networkidle0',
-          timeout: 30000 
+        const response = await page.goto(sitemapUrl, {
+          waitUntil: NAVIGATION_WAIT_UNTIL,
+          timeout: NAVIGATION_TIMEOUT_MS
         });
         
         if (!response || response.status() !== 200) {
@@ -355,20 +365,73 @@ export class CrawlerTools {
       
       try {
         console.log(`🚀 [TOOLS] Loading page: ${url}`);
-        const response = await page.goto(url, { 
-          waitUntil: 'networkidle0',
-          timeout: 30000 
-        });
-        
-        if (!response) {
+
+        /*
+         * A navigation timeout is not the same as an unreadable page.
+         *
+         * Whatever the wait condition, a slow site can exceed it with the
+         * document already complete -- which is exactly what happened on
+         * united.com, where a 2.4MB page carrying two forms was discarded
+         * because the network never went idle. So a timeout is caught here
+         * and the DOM is asked what it holds, rather than the page being
+         * thrown away unseen. Any other navigation error (DNS failure,
+         * connection reset, protocol error) means there is genuinely
+         * nothing to look at and is rethrown.
+         */
+        let response = null;
+        let navigationTimedOut = false;
+
+        try {
+          response = await page.goto(url, {
+            waitUntil: NAVIGATION_WAIT_UNTIL,
+            timeout: NAVIGATION_TIMEOUT_MS
+          });
+        } catch (navigationError) {
+          if (navigationError.name !== 'TimeoutError') {
+            throw navigationError;
+          }
+
+          navigationTimedOut = true;
+          console.warn(
+            `⏱️  [TOOLS] Navigation did not complete within ${NAVIGATION_TIMEOUT_MS}ms; ` +
+              `checking whether the page rendered anyway`
+          );
+        }
+
+        if (!response && !navigationTimedOut) {
           console.error('❌ [TOOLS] Failed to load page - no response');
           throw new Error('Failed to load page');
         }
-        
-        const status = response.status();
-        const finalUrl = response.url();
-        console.log(`📊 [TOOLS] Page loaded with status: ${status}`);
+
+        /*
+         * A timed-out navigation has no response object, so the status and
+         * header checks below are skipped rather than crashing on null. The
+         * salvage check immediately after is what decides that case.
+         */
+        const status = response ? response.status() : null;
+        const responseHeaders = response ? response.headers() : {};
+        const finalUrl = (response ? response.url() : page.url()) || url;
+        console.log(`📊 [TOOLS] Page loaded with status: ${status ?? 'unknown (navigation timed out)'}`);
         console.log(`📊 [TOOLS] Final URL: ${finalUrl}`);
+
+        if (navigationTimedOut) {
+          const readiness = await page.evaluate(measureReadiness).catch(() => null);
+
+          if (!isUsableDom(readiness)) {
+            console.error('❌ [TOOLS] Navigation timed out with nothing usable rendered');
+
+            throw pageUnreadableError({
+              url: finalUrl,
+              kind: 'nav-timeout',
+              waitedMs: NAVIGATION_TIMEOUT_MS
+            });
+          }
+
+          console.log(
+            `✅ [TOOLS] Page is usable despite the timeout: ${readiness.elements} elements, ` +
+              `${readiness.fields} fields, "${readiness.title}"`
+          );
+        }
 
         /*
          * Stop here when the page refused us.
@@ -384,14 +447,14 @@ export class CrawlerTools {
          * gatekeeper, and naming it is the difference between "we were not
          * allowed to look" and an unexplained failure.
          */
-        if (status >= 400) {
+        if (status !== null && status >= 400) {
           const blockedHtml = await page.content().catch(() => '');
 
           console.error(`❌ [TOOLS] Page refused the request: HTTP ${status}`);
 
           throw pageAccessError({
             status,
-            headers: response.headers(),
+            headers: responseHeaders,
             html: blockedHtml,
             url: finalUrl || url
           });
@@ -404,7 +467,7 @@ export class CrawlerTools {
          */
         const earlyHtml = await page.content().catch(() => '');
         const challenge = looksLikeChallengePage({
-          headers: response.headers(),
+          headers: responseHeaders,
           html: earlyHtml
         });
 
@@ -413,15 +476,37 @@ export class CrawlerTools {
 
           throw pageAccessError({
             status: status || 403,
-            headers: response.headers(),
+            headers: responseHeaders,
             html: earlyHtml,
             url: finalUrl || url
           });
         }
         
-        // Wait for any dynamic content
-        console.log('⏳ [TOOLS] Waiting for dynamic content...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        /*
+         * Now that navigation stops at `domcontentloaded`, this is what
+         * covers client-rendered forms: wait for a field to exist, rather
+         * than waiting a fixed two seconds and hoping.
+         *
+         * Costs nothing when the markup already carries fields, which is
+         * the common case. A page with genuinely no fields waits the full
+         * FIELD_WAIT_MS and then carries on -- the price of not reporting
+         * "no forms" about a form that was still rendering. The settle after
+         * it gives hydration a moment to attach to markup that has only
+         * just appeared.
+         */
+        console.log('⏳ [TOOLS] Waiting for form fields to appear...');
+        const fieldsAppeared = await page
+          .waitForSelector(FIELD_SELECTOR, { timeout: FIELD_WAIT_MS })
+          .then(() => true)
+          .catch(() => false);
+
+        console.log(
+          fieldsAppeared
+            ? '✅ [TOOLS] Fields present'
+            : `ℹ️  [TOOLS] No fields after ${FIELD_WAIT_MS}ms; continuing`
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, CONTENT_SETTLE_MS));
 
         /*
          * Wrap form-like groups the page never put in a `<form>`.
@@ -520,7 +605,7 @@ export class CrawlerTools {
         console.log(`✅ Page loaded successfully - FULL content preserved`);
         console.log(`   📄 HTML size: ${html.length} characters (NO TRUNCATION)`);
         console.log(`   🔗 Links found: ${sameOriginLinks.length}`);
-        console.log(`   📊 HTTP status: ${response.status()}`);
+        console.log(`   📊 HTTP status: ${status ?? 'unknown (navigation timed out)'}`);
         
         if (sameOriginLinks.length > 0) {
           console.log(`   🔗 Sample links: ${sameOriginLinks.slice(0, 3).join(', ')}${sameOriginLinks.length > 3 ? '...' : ''}`);
@@ -530,7 +615,8 @@ export class CrawlerTools {
           html, // FULL HTML - no truncation
           links: sameOriginLinks,
           networkLog,
-          status: response.status(),
+          status,
+          navigationTimedOut,
           fullContentPreserved: true,
           originalSize: html.length,
           formVisuals,
@@ -565,10 +651,17 @@ export class CrawlerTools {
         throw error;
       }
 
+      /*
+       * `unreadable` is the flag a single-page caller checks before treating
+       * this as a page with no forms. The empty HTML stays, so a multi-page
+       * crawl can still step over one bad page, but it is now labelled as a
+       * failure to read rather than passed off as a result.
+       */
       return {
         html: '',
         links: [],
         networkLog: [],
+        unreadable: true,
         error: error.message
       };
     }
@@ -839,8 +932,12 @@ export class CrawlerTools {
       await this.initBrowser();
       const page = await this.browser.newPage();
       
-      // Navigate to the page containing the form
-      await page.goto(formUrl, { waitUntil: 'networkidle0' });
+      // Navigate to the page containing the form. Same condition as the main
+      // path: network idle never arrives on a site with a live connection.
+      await page.goto(formUrl, {
+        waitUntil: NAVIGATION_WAIT_UNTIL,
+        timeout: NAVIGATION_TIMEOUT_MS
+      });
       
       // Parse form to understand fields
       const $ = cheerio.load(formHtml);

@@ -121,7 +121,9 @@ const PAGE_ACCESS_HEADINGS: Record<string, string> = {
   'not-found': 'That page does not exist',
   'rate-limited': 'The site is rate limiting us',
   'server-error': 'The site returned an error',
-  'load-failed': 'The page could not be read'
+  'load-failed': 'The page could not be read',
+  'nav-timeout': 'The page took too long to load',
+  unreadable: 'The page could not be read'
 };
 
 /** How the collapsed summary line names each way a scan can end. */

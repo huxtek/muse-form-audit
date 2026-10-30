@@ -5,6 +5,7 @@ import { analyzeFormWithModel } from './lib/analysis/modelFormAnalyzer.js';
 import { attachVisualsToForms } from './lib/visuals/captureFormVisuals.js';
 import { getScreenshot, putPageMap, putScreenshot } from './lib/visuals/screenshotStore.js';
 import { attachBehaviourToForms } from './lib/analysis/probeFormBehaviour.js';
+import { pageUnreadableError } from './lib/pageReadiness.js';
 
 /**
  * AI Agent for autonomous website crawling and form analysis
@@ -188,6 +189,15 @@ export class AIAgent {
       // Step 1: Load the target page
       console.log(`\n1️⃣ Loading page: ${this.targetUrl}`);
       const pageResult = await this.tools.goToPage(this.targetUrl);
+
+      // Same rule as the per-form scan: nothing read is not zero forms.
+      if (pageResult.unreadable || !pageResult.html) {
+        throw pageUnreadableError({
+          url: this.targetUrl,
+          reason: pageResult.error
+        });
+      }
+
       console.log(`✅ Page loaded: ${pageResult.html.length} characters`);
 
       this.updateProgress({
@@ -1250,10 +1260,17 @@ Start by analyzing the target URL: ${this.targetUrl}`;
       console.error(`❌ Error: ${error.message}`);
       console.error(`🔄 Iteration: ${this.currentIteration}`);
       
+      // `pageAccess` carries why the target could not be read, so this says
+      // which side the problem is on rather than a bare "Scan failed".
       this.updateProgress({
         status: 'failed',
         error: error.message,
-        currentStep: 'Scan failed'
+        currentStep: error.pageAccess
+          ? error.pageAccess.status
+            ? `Could not read the page (HTTP ${error.pageAccess.status})`
+            : 'Could not read the page'
+          : 'Scan failed',
+        ...(error.pageAccess ? { errorKind: error.pageAccess.kind } : {})
       });
       throw error;
     } finally {
@@ -1800,7 +1817,23 @@ Focus on AI agent needs: name attributes, field identification, form submission 
       
       // Navigate to the page and get HTML content
       const pageData = await this.tools.goToPage(this.targetUrl);
-      
+
+      /*
+       * Zero characters of HTML is never a finding about a page's forms.
+       *
+       * `goToPage` returns empty HTML for a navigation failure so that a
+       * multi-page crawl can step over one bad page. This scan has a single
+       * page, so there is nothing to step over: carrying on parsed an empty
+       * string, found no `<form>` in it, and reported "Scan completed - no
+       * forms found". united.com read exactly that way for months.
+       */
+      if (pageData.unreadable || !pageData.html) {
+        throw pageUnreadableError({
+          url: this.targetUrl,
+          reason: pageData.error
+        });
+      }
+
       // Step 2: Extract all forms from the page
       this.updateProgress({
         status: 'running',
@@ -2048,7 +2081,9 @@ Focus on AI agent needs: name attributes, field identification, form submission 
         status: 'failed',
         progress: 0,
         currentStep: error.pageAccess
-          ? `Could not read the page (HTTP ${error.pageAccess.status})`
+          ? error.pageAccess.status
+            ? `Could not read the page (HTTP ${error.pageAccess.status})`
+            : 'Could not read the page'
           : 'Per-form scan failed',
         error: error.message,
         ...(error.pageAccess ? { errorKind: error.pageAccess.kind } : {})
