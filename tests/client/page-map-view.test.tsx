@@ -357,3 +357,92 @@ describe('PageMapView expanded view', () => {
     }
   });
 });
+
+/**
+ * A form with no size has no place on the page.
+ *
+ * united.com is the measured case. Its second form is a co-browse support
+ * widget sitting behind `display:none` on an ancestor `<section>`, so its
+ * page rect is 0x0 at (0,0). A region was built for it regardless, and the
+ * "Form 2" badge inside that region is positioned absolutely -- so it
+ * painted at the very top-left corner of the map, a small marker claiming a
+ * form was there. Clicking it selected a form whose screenshot does not
+ * exist, which read as a form with an empty picture.
+ *
+ * The form stays in the report with its findings and its "Not shown on
+ * page" label. What it does not get is a position it never had.
+ */
+const unplacedForm = (index: number, pageIndex = 0): AnalyzedForm => ({
+  formId: `form-${index}`,
+  visual: {
+    visualIndex: index,
+    width: 0,
+    height: 0,
+    hasScreenshot: false,
+    notRendered: true,
+    fields: [],
+    pageRect: { x: 0, y: 0, width: 0, height: 0 },
+    pageMap: { pageIndex, width: PAGE.width, height: PAGE.height }
+  },
+  accessibility: { fieldIssues: [{ field: 'cobrowse.pin', severity: 'medium', issue: 'no name' }] }
+});
+
+describe('a form with no position on the page', () => {
+  it('is not outlined on the map', () => {
+    const forms = [formOnPage(0, 0, { x: 96, y: 225, width: 520, height: 428 }), unplacedForm(1)];
+
+    render(<PageMapView forms={forms} jobId="job-1" selectedIndex={0} onSelect={() => {}} />);
+    loadMap();
+
+    expect(regions()).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /^Form 2/ })).not.toBeInTheDocument();
+  });
+
+  it('is counted as not shown rather than quietly dropped', () => {
+    // The map says two forms were found but one is outlined, so it has to
+    // account for the difference.
+    const forms = [formOnPage(0, 0, { x: 96, y: 225, width: 520, height: 428 }), unplacedForm(1)];
+
+    render(<PageMapView forms={forms} jobId="job-1" selectedIndex={0} onSelect={() => {}} />);
+    loadMap();
+
+    expect(screen.getByText(/1 form outlined, 1 not shown on the page/i)).toBeInTheDocument();
+  });
+
+  it('says nothing extra when every form has a position', () => {
+    const forms = [
+      formOnPage(0, 0, { x: 0, y: 0, width: 100, height: 100 }),
+      formOnPage(1, 0, { x: 0, y: 300, width: 100, height: 100 })
+    ];
+
+    render(<PageMapView forms={forms} jobId="job-1" selectedIndex={0} onSelect={() => {}} />);
+    loadMap();
+
+    expect(screen.queryByText(/not shown on the page/i)).not.toBeInTheDocument();
+    expect(regions()).toHaveLength(2);
+  });
+
+  it('still shows the map when the selected form is the unplaced one', () => {
+    // Selecting it must not blank the map or crash: the other form's
+    // outline stays, and the header still names what is selected.
+    const forms = [formOnPage(0, 0, { x: 96, y: 225, width: 520, height: 428 }), unplacedForm(1)];
+
+    render(<PageMapView forms={forms} jobId="job-1" selectedIndex={1} onSelect={() => {}} />);
+    loadMap();
+
+    expect(screen.getByAltText(/scanned page/i)).toBeInTheDocument();
+    expect(regions()).toHaveLength(1);
+    expect(screen.getByText(/Form 2/)).toBeInTheDocument();
+  });
+
+  it('outlines a small form that really is on the page', () => {
+    // The guard is about having no size, not about being small. A 20px
+    // control is a real location.
+    const forms = [formOnPage(0, 0, { x: 40, y: 80, width: 20, height: 20 })];
+
+    render(<PageMapView forms={forms} jobId="job-1" selectedIndex={0} onSelect={() => {}} />);
+    loadMap();
+
+    expect(regions()).toHaveLength(1);
+  });
+});

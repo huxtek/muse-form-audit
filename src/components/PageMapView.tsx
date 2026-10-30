@@ -96,7 +96,8 @@ export const PageMapView = ({ forms, jobId, selectedIndex, onSelect }: PageMapVi
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium text-foreground">Scanned page</span>
         <span className="text-xs text-muted-foreground">
-          {regions().length} {regions().length === 1 ? "form" : "forms"} outlined &mdash; showing{" "}
+          {regions().length} {regions().length === 1 ? "form" : "forms"} outlined
+          {unplacedCount() > 0 && `, ${unplacedCount()} not shown on the page`} &mdash; showing{" "}
           <span className="text-foreground font-medium">Form {selectedIndex + 1}</span>
         </span>
         {pageMap.truncated && (
@@ -281,6 +282,29 @@ export const PageMapView = ({ forms, jobId, selectedIndex, onSelect }: PageMapVi
     onSelect(selectedIndex, { reveal: true });
   }
 
+  /**
+   * Whether a form has a place on the page at all.
+   *
+   * united.com's co-browse PIN form is the measured case: it sits behind
+   * `display:none` on an ancestor, so its page rect is 0x0 at (0,0). A region
+   * was drawn for it anyway, and because the "Form 2" badge is positioned
+   * absolutely inside the region it painted at the very top-left corner of
+   * the map -- a marker for a form that is nowhere on the page, which
+   * selected a form whose screenshot does not exist.
+   */
+  function placedOnPage(form: AnalyzedForm): boolean {
+    const rect = form.visual?.pageRect;
+
+    return Boolean(rect && rect.width >= 1 && rect.height >= 1);
+  }
+
+  /** Forms on this page that have no position to outline. */
+  function unplacedCount(): number {
+    return forms.filter(
+      (form) => form.visual?.pageMap?.pageIndex === pageIndex && !placedOnPage(form)
+    ).length;
+  }
+
   /** Forms that sit on the page currently being shown. */
   function regions(): Region[] {
     return forms.reduce<Region[]>((acc, form, index) => {
@@ -288,6 +312,12 @@ export const PageMapView = ({ forms, jobId, selectedIndex, onSelect }: PageMapVi
       const rect = visual?.pageRect;
 
       if (!rect || visual?.pageMap?.pageIndex !== pageIndex) {
+        return acc;
+      }
+
+      // No size means no location. Outlining it anyway put a badge in the
+      // corner of the map claiming a form was there.
+      if (!placedOnPage(form)) {
         return acc;
       }
 
