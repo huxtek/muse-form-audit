@@ -310,6 +310,22 @@ export function createMuseProvider({
     .filter(Boolean),
   logger = console
 } = {}) {
+  /*
+   * A per-attempt timeout at or above the whole budget means a slow call can
+   * never be retried: the first attempt alone overruns the budget, so no
+   * second one is ever started. That is a legitimate choice -- a model that
+   * has not answered in two minutes is unlikely to answer in four -- but it
+   * is not what "retry for 60 seconds" sounds like, and it cost one real
+   * scan its model-written report with no explanation in the log.
+   */
+  if (timeoutMs >= retryBudgetMs) {
+    logger?.warn?.(
+      `   ⚠ MODEL_TIMEOUT_MS (${Math.round(timeoutMs / 1000)}s) >= MUSE_RETRY_BUDGET_MS ` +
+        `(${Math.round(retryBudgetMs / 1000)}s): a timed-out call cannot be retried. ` +
+        `Lower the timeout or raise the budget to allow one.`
+    );
+  }
+
   return {
     name: 'muse',
     label: 'Muse',
@@ -403,8 +419,19 @@ export function createMuseProvider({
           const exhausted = elapsed + retryDelayMs > retryBudgetMs || attempt >= maxAttempts;
 
           if (exhausted) {
+            // A single attempt can outlast the whole budget, and when it
+            // does there was never a retry to give up on. Saying "gave up
+            // after 1 attempts over 120s" against a 60s budget reads as a
+            // bug in the budget; naming the cause is the difference between
+            // a confusing log and an actionable one.
+            const consumedByOneAttempt = attempt === 1 && elapsed > retryBudgetMs;
+
             logger?.warn?.(
-              `   ⚠ gave up after ${attempt} attempts over ${Math.round(elapsed / 1000)}s`
+              consumedByOneAttempt
+                ? `   ⚠ no retry possible: one attempt took ${Math.round(elapsed / 1000)}s, ` +
+                    `which already exceeds the ${Math.round(retryBudgetMs / 1000)}s budget ` +
+                    `(MODEL_TIMEOUT_MS is ${Math.round(timeoutMs / 1000)}s)`
+                : `   ⚠ gave up after ${attempt} attempts over ${Math.round(elapsed / 1000)}s`
             );
 
             throw error;

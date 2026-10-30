@@ -13,16 +13,33 @@ const toInt = (value, fallback) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
+/**
+ * Seconds to wait, which is what `retryAfter` has always claimed to be.
+ *
+ * It used to report `resetTime / 1000` -- the reset moment as a Unix
+ * timestamp. A caller reading the field as a delay, which is the only thing
+ * its name can mean, was told to wait 1793325535 seconds: fifty-six years.
+ */
+const retryAfterSeconds = (req) => {
+  const resetTime = req.rateLimit?.resetTime;
+  const waitMs = resetTime ? new Date(resetTime).getTime() - Date.now() : 0;
+
+  return Math.max(1, Math.ceil(waitMs / 1000));
+};
+
 const baseConfig = {
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
     console.log(`Rate limit exceeded for ${req.ip} on ${req.method} ${req.path}`);
 
+    const seconds = retryAfterSeconds(req);
+
+    res.set('Retry-After', String(seconds));
     res.status(429).json({
       error: 'Too Many Requests',
-      message: 'Rate limit exceeded. Please slow down your requests.',
-      retryAfter: Math.ceil((req.rateLimit?.resetTime ?? Date.now()) / 1000)
+      message: `Rate limit exceeded. Please wait ${seconds}s before retrying.`,
+      retryAfter: seconds
     });
   }
 };
@@ -30,11 +47,23 @@ const baseConfig = {
 /**
  * General API rate limiting, applied to every /api route.
  */
+/**
+ * Reads of a running job, which `jobReadLimiter` meters instead.
+ *
+ * This limiter is mounted on `/api`, so without the exemption a status poll
+ * would be counted twice and the larger allowance below would have no
+ * effect: the general budget would still run out first. Paths are
+ * mount-relative here, which is why they have no `/api` prefix -- the log
+ * line for the lockout read `GET /report/927a39b5-...`.
+ */
+const isJobRead = (req) =>
+  ['/report/', '/screenshot/', '/page-map/'].some((prefix) => req.path.startsWith(prefix));
+
 export const generalApiLimiter = rateLimit({
   ...baseConfig,
   windowMs: toInt(process.env.RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
   max: toInt(process.env.RATE_LIMIT_MAX_REQUESTS, 100),
-  skip: (req) => req.path === '/health'
+  skip: (req) => req.path === '/health' || isJobRead(req)
 });
 
 /**
@@ -51,12 +80,34 @@ export const scanLimiter = rateLimit({
   handler: (req, res) => {
     console.log(`Scan rate limit exceeded for ${req.ip}`);
 
+    const seconds = retryAfterSeconds(req);
+
+    res.set('Retry-After', String(seconds));
     res.status(429).json({
       error: 'Scan Rate Limit Exceeded',
-      message: 'Too many scan requests. Please wait before starting another scan.',
-      retryAfter: Math.ceil((req.rateLimit?.resetTime ?? Date.now()) / 1000)
+      message: `Too many scan requests. Please wait ${seconds}s before starting another scan.`,
+      retryAfter: seconds
     });
   }
+});
+
+/**
+ * Reads of a job already under way: status, screenshots, page maps.
+ *
+ * These need their own, much larger allowance because their cost is not the
+ * client's choice. The UI polls a running scan every couple of seconds, so
+ * the number of reads is set by how long the scan takes -- and a scan that
+ * waits out a model outage can run for minutes. One 133-second scan of
+ * swabiz.com spent 66 of the general limiter's 100 requests, so a second
+ * slow scan locked the operator out of their own instance mid-report.
+ *
+ * Still bounded: a read is cheap but not free, and an unmetered endpoint on
+ * an unauthenticated server is how someone else's bandwidth bill grows.
+ */
+export const jobReadLimiter = rateLimit({
+  ...baseConfig,
+  windowMs: toInt(process.env.JOB_READ_RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
+  max: toInt(process.env.JOB_READ_RATE_LIMIT_MAX_REQUESTS, 900)
 });
 
 /**

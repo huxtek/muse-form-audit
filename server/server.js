@@ -48,6 +48,7 @@ import analyzeRoutes from './routes/analyze.js';
 import { validateURLMiddleware, getUrlGuardConfig } from './middleware/validation.js';
 import {
   generalApiLimiter,
+  jobReadLimiter,
   scanLimiter,
   publicLimiter,
   rateLimitInfo
@@ -729,7 +730,7 @@ app.post('/api/scan', scanLimiter, validateURLMiddleware, async (req, res) => {
  * Serves one captured form screenshot. The bytes are held in process memory
  * rather than inlined into the scan results, so polling stays small.
  */
-app.get('/api/screenshot/:jobId/:formIndex', (req, res) => {
+app.get('/api/screenshot/:jobId/:formIndex', jobReadLimiter, (req, res) => {
   const { jobId, formIndex } = req.params;
 
   if (!jobs.has(jobId)) {
@@ -768,7 +769,7 @@ app.get('/api/screenshot/:jobId/:formIndex', (req, res) => {
  * Serves the whole-page map for one scanned page. JPEG; used as a navigation
  * aid with each analysed form outlined on it.
  */
-app.get('/api/page-map/:jobId/:pageIndex', (req, res) => {
+app.get('/api/page-map/:jobId/:pageIndex', jobReadLimiter, (req, res) => {
   const { jobId, pageIndex } = req.params;
 
   if (!jobs.has(jobId)) {
@@ -800,7 +801,7 @@ app.get('/api/page-map/:jobId/:pageIndex', (req, res) => {
   res.send(image.buffer);
 });
 
-app.get('/api/report/:jobId', (req, res) => {
+app.get('/api/report/:jobId', jobReadLimiter, (req, res) => {
   const job = jobs.get(req.params.jobId);
 
   if (!job) {

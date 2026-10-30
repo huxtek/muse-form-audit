@@ -77,6 +77,25 @@ const SAMPLE_REPORT_URL = 'https://skyline-air.example/';
  */
 const TERMINAL_STATUSES = ['cancelled', 'completed', 'completed_with_errors', 'failed'];
 
+/**
+ * How often to ask a running job for its progress.
+ *
+ * Two seconds while there is something to watch, then slower once the scan
+ * is plainly in a long wait. A scan that waits out a model outage can run
+ * for minutes, and at a flat two seconds a 133-second scan of swabiz.com
+ * spent 66 requests -- two of those locked the operator out of their own
+ * instance against a 100-request budget. The WebSocket carries the
+ * interesting updates anyway; this is the backup for when it does not.
+ */
+const POLL_INTERVAL_MS = 2000;
+const SLOW_POLL_INTERVAL_MS = 5000;
+/** 15 polls at 2s is the first 30 seconds, where the visible steps happen. */
+const SLOW_POLL_AFTER_POLLS = 15;
+
+/** Widening delays for a poll that failed, rather than giving up on it. */
+const POLL_RETRY_DELAYS_MS = [2000, 5000, 10_000, 20_000];
+const MAX_POLL_RETRIES = 6;
+
 /** How the collapsed summary line names each way a scan can end. */
 const FINISHED_HEADLINES: Record<string, string> = {
   cancelled: 'Scan cancelled',
@@ -485,7 +504,11 @@ export const AIScanner = () => {
    * and one of them is now reached from an effect -- where a reference to a
    * `const` declared further down is an access before declaration.
    */
-  const pollJobStatus = async (jobId: string, generation: number) => {
+  const pollJobStatus = async (
+    jobId: string,
+    generation: number,
+    { polls = 0, retries = 0 }: { polls?: number; retries?: number } = {}
+  ) => {
     // Checked before the request and again after it: a scan started while
     // this one was waiting on the network would otherwise have its state
     // overwritten by a job it has nothing to do with.
@@ -503,10 +526,31 @@ export const AIScanner = () => {
       setJobState(job);
 
       if (job.status === 'running' || job.status === 'queued') {
-        setTimeout(() => pollJobStatus(jobId, generation), 2000);
+        setTimeout(
+          () => pollJobStatus(jobId, generation, { polls: polls + 1, retries: 0 }),
+          pollDelayFor(polls)
+        );
       }
     } catch (error) {
+      /*
+       * A failed poll used to end the loop for good. One rate-limited
+       * response -- or any network blip -- and the scan froze at whatever
+       * progress it had last reported, with no error and no further updates,
+       * while the backend carried on working and finished normally.
+       *
+       * Retried with a widening delay instead, so a scan survives a blip and
+       * a server asking us to slow down gets what it asked for.
+       */
       console.error('Polling error:', error);
+
+      if (generation !== scanGenerationRef.current || retries >= MAX_POLL_RETRIES) {
+        return;
+      }
+
+      setTimeout(
+        () => pollJobStatus(jobId, generation, { polls, retries: retries + 1 }),
+        POLL_RETRY_DELAYS_MS[Math.min(retries, POLL_RETRY_DELAYS_MS.length - 1)]
+      );
     }
   };
 
@@ -916,6 +960,19 @@ export const AIScanner = () => {
       }
     }
   };
+
+  /**
+   * Slower once a scan has been going a while, because the early seconds are
+   * where the visible steps happen and the later minutes are usually one
+   * long wait on a single model call.
+   *
+   * Counted in polls rather than measured against `createdAt`: the timestamp
+   * comes from the server, so a clock difference would decide the interval,
+   * and a job record whose date is old would start at the slow rate on its
+   * very first poll.
+   */
+  const pollDelayFor = (polls: number) =>
+    polls < SLOW_POLL_AFTER_POLLS ? POLL_INTERVAL_MS : SLOW_POLL_INTERVAL_MS;
 
   /**
    * Stops the running scan.

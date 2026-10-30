@@ -340,6 +340,50 @@ describe('AIScanner polling', () => {
    * more request scheduled or in flight for the old one. That response
    * restored the previous report after the new scan had already cleared it.
    */
+  /**
+   * A failed poll used to end the loop for good.
+   *
+   * The server's own rate limiter refused a status poll during a long scan,
+   * and the loop simply stopped: no error on screen, no further updates, the
+   * progress bar frozen at whatever it had last reported -- while the backend
+   * carried on and finished the scan normally.
+   */
+  it('recovers from a failed poll instead of freezing', async () => {
+    startScanMock.mockResolvedValue({ success: true, jobId: 'job-1' });
+    getReportMock
+      .mockRejectedValueOnce(new Error('Rate limit exceeded. Please wait 60s before retrying.'))
+      .mockResolvedValue(
+        jobRecord({
+          id: 'job-1',
+          status: 'completed',
+          progress: 100,
+          results: { forms: [{ formId: 'form-0', accessibility: { score: 71 } }] }
+        })
+      );
+
+    await submitScan();
+
+    // The first poll was refused, so nothing is on screen yet.
+    expect(screen.queryByText('Scan complete')).not.toBeInTheDocument();
+
+    await advancePolls(3);
+
+    expect(getReportMock.mock.calls.length).toBeGreaterThan(1);
+    expect(screen.getByText('Scan complete')).toBeInTheDocument();
+  });
+
+  it('gives up on a poll that keeps failing, rather than retrying forever', async () => {
+    startScanMock.mockResolvedValue({ success: true, jobId: 'job-1' });
+    getReportMock.mockRejectedValue(new Error('network down'));
+
+    await submitScan();
+    await advancePolls(60);
+
+    // Bounded: a handful of widening retries, not an endless loop against a
+    // server that is clearly not answering.
+    expect(getReportMock.mock.calls.length).toBeLessThanOrEqual(8);
+  });
+
   it('ignores a poll for the scan the user backed out of', async () => {
     // Back while a scan is running is the plainest way to be on the form
     // with a live polling loop still running behind it.
