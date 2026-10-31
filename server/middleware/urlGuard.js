@@ -2,6 +2,8 @@ import dns from 'dns';
 import net from 'net';
 import { URL } from 'url';
 
+import { crawlerRequestHeaders } from '../lib/userAgent.js';
+
 /**
  * SSRF guard for the scanner.
  *
@@ -399,7 +401,22 @@ export const validateURLMiddleware = async (req, res, next) => {
 
     if (toBool(process.env.SKIP_URL_PREFLIGHT, false) !== true) {
       try {
-        const preflight = await safeFetch(finalUrl, { method: 'GET' });
+        /*
+         * Identify as the crawler that follows.
+         *
+         * This request's final URL becomes the scan target, so a server that
+         * answers it differently from the browser decides what gets scanned.
+         * Sending nothing meant google.com/travel/flights answered with a 302
+         * to its "unsupported browser" page, which was then scanned and
+         * reported as having no forms.
+         *
+         * Every hop is still validated exactly as before; only the headers
+         * on the request changed.
+         */
+        const preflight = await safeFetch(finalUrl, {
+          method: 'GET',
+          headers: crawlerRequestHeaders()
+        });
         finalUrl = preflight.finalUrl;
         if (preflight.response.body) {
           await preflight.response.body.cancel().catch(() => {});

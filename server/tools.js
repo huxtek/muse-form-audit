@@ -15,6 +15,7 @@ import {
 } from './lib/visuals/inferFormGroups.js';
 import { looksLikeChallengePage, pageAccessError } from './lib/botWall.js';
 import { summariseFieldLabel } from './lib/analysis/fieldLabel.js';
+import { CRAWLER_USER_AGENT } from './lib/userAgent.js';
 import {
   CONTENT_SETTLE_MS,
   FIELD_SELECTOR,
@@ -352,7 +353,9 @@ export class CrawlerTools {
       // Set viewport and user agent
       console.log('⚙️  [TOOLS] Setting viewport and user agent...');
       await page.setViewport({ width: 1280, height: 720 });
-      await page.setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+      // Shared with the URL guard's pre-flight, so both halves of the
+      // scanner ask for the page as the same client.
+      await page.setUserAgent(CRAWLER_USER_AGENT);
       
       // Enable network logging
       const networkLog = [];
