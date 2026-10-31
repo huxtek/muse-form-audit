@@ -316,9 +316,7 @@ export const FormVisualOverlay = ({
               />
               <code className="font-mono text-foreground">{group.label}</code>{" "}
               {group.issues.length} finding{group.issues.length === 1 ? "" : "s"} &middot;{" "}
-              {group.inMarkup
-                ? "in the markup but not rendered, so there is no box to point at"
-                : "named by the analyser but not found among the extracted controls"}
+              {UNPLACED_REASONS[group.reason]}
             </li>
           ))}
         </ul>
@@ -498,13 +496,30 @@ export const FormVisualOverlay = ({
    * so they should not read the same.
    */
   function groupByField(issues: FieldIssue[]): UnplacedGroup[] {
-    const markup = new Set(
-      (form.fields ?? []).flatMap((field) =>
-        [field.id, field.name]
-          .filter((value): value is string => Boolean(value))
-          .map((value) => value.toLowerCase())
-      )
-    );
+    /*
+     * Three reasons a finding has no box, not two.
+     *
+     * google.com/travel/flights renders its controls perfectly well and gives
+     * them no `name` and no `id`, so the extractor labels them `field-0`,
+     * `field-1` and the captured geometry has nothing to match them by.
+     * Reporting those as "not rendered" was simply untrue -- they are on
+     * screen, and being unidentifiable is their actual problem, which is also
+     * what the findings about them say.
+     */
+    const extracted = new Map<string, { declared: boolean }>();
+
+    for (const field of form.fields ?? []) {
+      // `field-0` is what the extractor assigns when the page declared no id,
+      // so it marks an anonymous control rather than naming one.
+      const declared = Boolean(field.name) || !/^field-\d+$/.test(field.id ?? '');
+
+      for (const value of [field.id, field.name]) {
+        if (value) {
+          extracted.set(value.toLowerCase(), { declared });
+        }
+      }
+    }
+
     const groups = new Map<string, UnplacedGroup>();
 
     for (const issue of issues) {
@@ -517,12 +532,14 @@ export const FormVisualOverlay = ({
         continue;
       }
 
+      const match = extracted.get(identifier);
+
       groups.set(identifier, {
         identifier,
         label: issue.field,
         issues: [issue],
         severity: issue.severity,
-        inMarkup: markup.has(identifier)
+        reason: !match ? 'unknown' : match.declared ? 'not-rendered' : 'anonymous'
       });
     }
 
@@ -538,14 +555,28 @@ export const FormVisualOverlay = ({
   }
 };
 
+/**
+ * Why a finding has no box, in the reader's terms.
+ *
+ * `anonymous` exists because google.com/travel/flights renders its controls
+ * and declares no name or id for any of them, so nothing connects a finding
+ * to a box. Calling that "not rendered" described the wrong problem.
+ */
+const UNPLACED_REASONS: Record<UnplacedReason, string> = {
+  'not-rendered': "in the markup but not rendered, so there is no box to point at",
+  anonymous: "on the page but with no name or id, so it cannot be matched to a control here",
+  unknown: "named by the analyser but not found among the extracted controls"
+};
+
+type UnplacedReason = 'not-rendered' | 'anonymous' | 'unknown';
+
 /** A control whose findings cannot be drawn, and why. */
 interface UnplacedGroup {
   identifier: string;
   label: string;
   issues: FieldIssue[];
   severity: IssueSeverity;
-  /** True when the control is in the extracted markup but has no box. */
-  inMarkup: boolean;
+  reason: UnplacedReason;
 }
 
 interface FormVisualOverlayProps {

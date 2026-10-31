@@ -659,3 +659,71 @@ describe('findings that cannot be drawn on the form image', () => {
     expect(screen.queryByText(/not marked on this image/i)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * A control can be on screen and still unmatchable.
+ *
+ * google.com/travel/flights renders eight inputs and seven comboboxes and
+ * declares no `name` and no `id` for any of them, so the extractor labels
+ * them `field-0`, `field-1`, and the captured geometry has nothing to match
+ * them by. They were reported as "in the markup but not rendered", which
+ * describes the wrong problem: they are rendered, and being unidentifiable
+ * is exactly what the findings about them say.
+ */
+describe('a finding on a control with no name or id', () => {
+  const googleForm = () =>
+    buildForm({
+      formId: 'form-0',
+      fields: [
+        { id: 'field-0', name: '', type: 'text' },
+        { id: 'field-1', name: '', type: 'text' }
+      ],
+      accessibility: {
+        fieldIssues: [
+          { field: 'field-0', severity: 'high', issue: 'No name attribute' },
+          { field: 'field-1', severity: 'high', issue: 'No name attribute' }
+        ]
+      }
+    });
+
+  it('says it is on the page but cannot be matched', () => {
+    render(<FormVisualOverlay form={googleForm()} jobId="job-abc" />);
+    loadImage();
+
+    expect(
+      screen.getAllByText(/on the page but with no name or id/i).length
+    ).toBeGreaterThan(0);
+  });
+
+  it('does not claim the control is unrendered', () => {
+    render(<FormVisualOverlay form={googleForm()} jobId="job-abc" />);
+    loadImage();
+
+    expect(screen.queryByText(/not rendered/i)).not.toBeInTheDocument();
+  });
+
+  it('still reports the severities it could not draw', () => {
+    render(<FormVisualOverlay form={googleForm()} jobId="job-abc" />);
+    loadImage();
+
+    const panel = screen.getByText(/not marked on this image/i).closest('div') as HTMLElement;
+
+    expect(within(panel).getByText(/2 high/)).toBeInTheDocument();
+  });
+
+  it('keeps calling a hidden declared control unrendered', () => {
+    // expedia.com's case must not be relabelled: those inputs have real ids
+    // and carry class="is-hidden".
+    const form = buildForm({
+      fields: [{ id: 'id__R65p-input1', name: '', type: 'text' }],
+      accessibility: {
+        fieldIssues: [{ field: 'id__R65p-input1', severity: 'high', issue: 'no name' }]
+      }
+    });
+
+    render(<FormVisualOverlay form={form} jobId="job-abc" />);
+    loadImage();
+
+    expect(screen.getByText(/in the markup but not rendered/i)).toBeInTheDocument();
+  });
+});
