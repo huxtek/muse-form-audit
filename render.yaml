@@ -99,10 +99,33 @@ services:
       # bill, so they are tighter here than locally. ---
       - key: SCAN_RATE_LIMIT_WINDOW_MS
         value: "300000"
+
+      # Operator-owned, which is why it carries no value here.
+      #
+      # This file used to pin it to 3. That is a sensible number for an
+      # unauthenticated public endpoint and the wrong one for a demo, so it
+      # gets raised in the dashboard -- and a dashboard override of a
+      # blueprint-managed value is reverted the next time Render syncs this
+      # file. The failure that invites is the limit dropping back to 3
+      # mid-demo, with the operator locked out of their own instance and no
+      # obvious reason why.
+      #
+      # `sync: false` means Render asks once and then leaves it alone, so the
+      # dashboard value survives every later sync. Left unset the code
+      # default applies, which is 5 per window -- tight, which is the right
+      # way to be wrong.
       - key: SCAN_RATE_LIMIT_MAX_REQUESTS
-        value: "3"
+        sync: false
+
       - key: RATE_LIMIT_MAX_REQUESTS
         value: "60"
+
+      # Job polling gets its own generous allowance. The UI polls
+      # /api/report while a scan runs, and a long scan is polled dozens of
+      # times: 66 reads during one 133s scan used two thirds of the general
+      # limit and locked the operator out of their own running scan.
+      - key: JOB_READ_RATE_LIMIT_MAX_REQUESTS
+        value: "900"
 
       - key: NODE_ENV
         value: production

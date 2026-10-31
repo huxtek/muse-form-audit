@@ -222,20 +222,11 @@ The distinction matters: **Vite inlines every `VITE_`-prefixed variable into
 the browser bundle**, so anything with that prefix is published. Keys and
 tokens must stay unprefixed.
 
-It covers the settings most deployments need — provider keys, the browser
-token, host and port, CORS, the URL guard and the rate limits. A number of
-tuning knobs are not in it yet and are documented where they are read:
-
-| Setting | Where it is read | What it tunes |
-| --- | --- | --- |
-| `NAVIGATION_WAIT_UNTIL`, `NAVIGATION_TIMEOUT_MS`, `FIELD_WAIT_MS`, `CONTENT_SETTLE_MS` | `server/lib/pageReadiness.js` | When a page counts as ready |
-| `VISUAL_*` | `server/lib/visuals/captureFormVisuals.js` | Screenshot and page-map limits |
-| `INFER_FORM_GROUPS` | `server/lib/visuals/inferFormGroups.js` | Turn form inference off |
-| `CRAWLER_USER_AGENT` | `server/lib/userAgent.js` | How the scanner identifies itself |
-| `MODEL_HTML_CHAR_LIMIT`, `MODEL_ANALYSIS_MAX_TOKENS` | `server/lib/analysis/modelFormAnalyzer.js` | Prompt size limits |
-| `MAX_LABEL_CHARS` | `server/lib/analysis/fieldLabel.js` | When a label is too long to be a name |
-| `PROBE_*` | `server/lib/analysis/probeFormBehaviour.js` | Behaviour probe limits |
-| `JOB_READ_RATE_LIMIT_*` | `server/middleware/rateLimiting.js` | The polling limiter |
+It documents every variable the app reads, grouped by what each one affects:
+provider keys and prompt limits, the browser token, when a page counts as
+ready, form inference, screenshot and page-map caps, the behaviour probe, job
+retention, the SSRF guard, and the four rate limiters. Most carry the reason
+the default is what it is, usually a measurement.
 
 ## Run it
 
