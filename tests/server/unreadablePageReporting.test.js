@@ -97,3 +97,50 @@ describe('a page that was read and genuinely has no forms', () => {
     expect(last.currentStep).toBe('Scan completed - no forms found');
   });
 });
+
+/**
+ * The same rule on the other single-page route.
+ *
+ * `runSinglePageAnalysis` is reachable from `/api/analyze` and from
+ * `startScan` when a scan is not a full crawl. It had the same guard added
+ * and no test, so nothing stopped the empty-HTML path from coming back here
+ * while the per-form route stayed correct.
+ */
+describe('the synchronous single-page route', () => {
+  it('fails rather than reporting a page it never read as empty', async () => {
+    const updates = await runWith('runSinglePageAnalysis', {
+      html: '',
+      links: [],
+      unreadable: true,
+      error: 'Navigation timeout of 45000 ms exceeded'
+    });
+    const last = updates.at(-1);
+
+    expect(last.status).toBe('failed');
+    expect(last.error).toMatch(/could not be read/i);
+  });
+
+  it('carries the reason the interface uses to pick a heading', async () => {
+    // Dropped on this route while the other two kept it, so a bot wall
+    // reached the user as a bare "Scan failed".
+    const updates = await runWith('runSinglePageAnalysis', {
+      html: '',
+      links: [],
+      unreadable: true,
+      error: 'net::ERR_CONNECTION_RESET'
+    });
+
+    expect(updates.at(-1).errorKind).toBe('unreadable');
+  });
+
+  it('passes a page it could read on to extraction', async () => {
+    // The guard must not swallow a readable page with no forms.
+    const updates = await runWith('runSinglePageAnalysis', {
+      html: '<html><body><h1>No forms here</h1></body></html>',
+      links: [],
+      status: 200
+    });
+
+    expect(updates.every((update) => update.status !== 'failed')).toBe(true);
+  });
+});

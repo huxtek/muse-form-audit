@@ -261,9 +261,12 @@ export class AIAgent {
 
     } catch (error) {
       console.error(`❌ Single page analysis failed:`, error);
+      // `errorKind` was dropped here, so a page that refused us lost the
+      // reason on this route while carrying it on the other two.
       this.updateProgress({
         status: 'failed',
-        error: error.message
+        error: error.message,
+        ...(error.pageAccess ? { errorKind: error.pageAccess.kind } : {})
       });
     }
   }
